@@ -2,7 +2,7 @@
 keystore/
 .env*
 !.env.example
-storage/
+/storage/
 .chain/
 
 # Foundry build output

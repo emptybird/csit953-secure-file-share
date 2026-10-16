@@ -2,3 +2,5 @@
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra"
+# Raised when web3 imports websockets; not something this project can fix.
+filterwarnings = ["ignore:websockets.legacy is deprecated:DeprecationWarning"]
