@@ -1,0 +1,15 @@
+name: 953-a2
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - tk>=8.6.13
+  - pip
+  - pip:
+      - cryptography>=44
+      - web3>=7.6,<8
+      - eth-account>=0.13
+      - python-dotenv>=1.0
+      - pytest>=8
+      - py_ecc>=8.0.0
+      - bandit>=1.7

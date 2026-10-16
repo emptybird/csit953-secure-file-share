@@ -1,0 +1,21 @@
+# secrets and local state
+keystore/
+.env*
+!.env.example
+storage/
+.chain/
+
+# Foundry build output
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+.DS_Store
+
+# assignment brief (not ours to publish)
+task_requirement.md

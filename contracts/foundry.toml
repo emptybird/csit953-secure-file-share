@@ -1,0 +1,27 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib"]
+
+# Pinned so that Etherscan source verification reproduces the same bytecode.
+solc_version = "0.8.30"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+
+[fuzz]
+runs = 1000
+
+[invariant]
+runs = 256
+depth = 64
+fail_on_revert = false
+show_metrics = true
+
+[fmt]
+line_length = 120
+
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}" }
