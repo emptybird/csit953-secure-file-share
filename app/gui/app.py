@@ -24,6 +24,7 @@ import tkinter as tk
 import webbrowser
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from tkinter import messagebox
 from typing import TypeVar
 
@@ -57,6 +58,7 @@ from app.services.models import AccountInfo, KeyStatus
 T = TypeVar("T")
 
 WINDOW_TITLE = "Secure File Share"
+ICON_FILE = Path(__file__).with_name("assets") / "app-icon.png"
 WINDOW_SIZE = (1280, 820)
 WINDOW_MIN_SIZE = (1080, 700)
 SCREEN_MARGIN = (40, 80)
@@ -96,6 +98,9 @@ class SecureFileShareApp(tk.Tk):
     def __init__(self, *, network: str | None = None, alias: str | None = None, demo: bool = False) -> None:
         super().__init__()
         theme.init(self)
+        self._icon = _app_icon(self)  # keep a reference: Tk drops an image nobody holds
+        if self._icon is not None:
+            self.iconphoto(True, self._icon)
         self.demo = demo
         self.worker = Worker(self)
         self._session: Session | None = None
@@ -550,6 +555,14 @@ class _Shell(tk.Frame):
             refresh = getattr(page, "on_account_changed", None)
             if refresh is not None:
                 refresh()
+
+
+def _app_icon(root: tk.Tk) -> tk.PhotoImage | None:
+    """The Dock and taskbar icon, or None if the image cannot be read; the window works either way."""
+    try:
+        return tk.PhotoImage(master=root, file=str(ICON_FILE))
+    except tk.TclError:
+        return None
 
 
 def _old_tk_warning(root: tk.Tk) -> str | None:

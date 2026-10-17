@@ -2,7 +2,8 @@
 
 Each icon fits a square of side `size` centred on (x, y) and is drawn with
 round caps in a single colour. `draw(canvas, name, x, y, size, colour)` is the
-only entry point; `logo` draws the app mark used on the login page and sidebar.
+only entry point; `logo` draws the app mark used on the login page and sidebar,
+the same key-and-block design as the Dock icon in assets/app-icon.png.
 """
 
 from __future__ import annotations
@@ -201,7 +202,40 @@ def draw(canvas: tk.Canvas, name: str, x: float, y: float, size: float, colour: 
 
 
 def logo(canvas: tk.Canvas, x: float, y: float, size: float, colour: str, paper: str) -> None:
-    """A seal: filled disc with a shield and a check cut out of it."""
-    r = size / 2
-    canvas.create_oval(x - r, y - r, x + r, y + r, fill=colour, outline=colour)
-    _shield(canvas, x, y + size * 0.01, size * 0.62, paper, max(1.5, size * 0.07))
+    """The app mark: a key whose bow is a block, on a rounded tile of side `size`.
+
+    The geometry follows assets/app-icon.png, drawn on a 1024-unit grid whose
+    tile spans units 100 to 924; the key is scaled by 1.06 about (466, 518)."""
+    left, top = x - size / 2, y - size / 2
+    unit = size / 824
+
+    def at(gx: float, gy: float) -> tuple[float, float]:
+        return left + (512 + 1.06 * (gx - 466) - 100) * unit, top + (512 + 1.06 * (gy - 518) - 100) * unit
+
+    _tile(canvas, left, top, left + size, top + size, 2 * 184 * unit, colour)  # smoothing halves the radius
+    cx, cy, r = 400.0, 392.0, 148.0
+    corners = [
+        (cx + r * math.cos(math.radians(a)), cy - r * math.sin(math.radians(a))) for a in (90, 30, -30, -90, -150, 150)
+    ]
+    _, upper_right, lower_right, bottom, _, upper_left = corners
+    stroke = 1.06 * unit
+    block = [c for corner in corners for c in at(*corner)]
+    canvas.create_polygon(*block, fill="", outline=paper, width=52 * stroke, joinstyle="round")
+    _line(canvas, [*at(*upper_left), *at(cx, cy), *at(*upper_right)], paper, 40 * stroke)
+    _line(canvas, [*at(cx, cy), *at(*bottom)], paper, 40 * stroke)
+    # The shaft leaves the block's lower-right face at right angles; two teeth point up and right.
+    sx, sy = (lower_right[0] + bottom[0]) / 2, (lower_right[1] + bottom[1]) / 2
+    along, across = (0.5, math.sqrt(3) / 2), (math.sqrt(3) / 2, -0.5)
+    _line(canvas, [*at(sx, sy), *at(sx + along[0] * 360, sy + along[1] * 360)], paper, 56 * stroke)
+    for distance in (250, 322):
+        bx, by = sx + along[0] * distance, sy + along[1] * distance
+        _line(canvas, [*at(bx, by), *at(bx + across[0] * 78, by + across[1] * 78)], paper, 56 * stroke)
+
+
+def _tile(canvas: tk.Canvas, x1: float, y1: float, x2: float, y2: float, r: float, colour: str) -> None:
+    """A filled square whose smoothed corners curve over about r / 2 (like widgets.rounded_rect)."""
+    points = (
+        x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r, x2, y2 - r, x2, y2,
+        x2 - r, y2, x1 + r, y2, x1, y2, x1, y2 - r, x1, y1 + r, x1, y1,
+    )  # fmt: skip
+    canvas.create_polygon(points, smooth=True, splinesteps=16, fill=colour, outline=colour)
