@@ -14,7 +14,7 @@ from enum import Enum
 from app.chain import RequestStatus
 from app.chain.client import FileRecord, TxReceipt
 from app.crypto.aead import DecryptedFile
-from app.crypto.encoding import fingerprint
+from app.crypto.encoding import PUBLIC_KEY_LEN, fingerprint
 
 # ------------------------------------------------------------------ account
 
@@ -121,6 +121,32 @@ class FileSummary:
     @property
     def can_retrieve(self) -> bool:
         return self.is_mine or self.my_status is RequestStatus.APPROVED
+
+
+# ------------------------------------------------------------ key grant
+
+
+@dataclass(frozen=True)
+class KeyGrant:
+    """The file key material the contract holds for me (DESIGN.md 6.1): the
+    93-byte ECIES wrappedKey from approveAccess, or the owner's own copy.
+    It is public on-chain; only the recipient's K_enc can open it."""
+
+    file_id: bytes
+    recipient: str
+    status: RequestStatus
+    updated_at: int
+    is_owner_copy: bool
+    wrapped_key: bytes = field(repr=False)
+
+    @property
+    def size(self) -> int:
+        return len(self.wrapped_key)
+
+    @property
+    def ephemeral_fingerprint(self) -> str:
+        """Fingerprint of E, the one-time public key the owner wrapped the DEK with."""
+        return fingerprint(self.wrapped_key[:PUBLIC_KEY_LEN])
 
 
 # ------------------------------------------------------------- verification

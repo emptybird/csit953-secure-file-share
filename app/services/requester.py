@@ -17,7 +17,7 @@ from app.chain.errors import short_hex
 from app.crypto.encoding import to_hex32
 from app.services import AccessDeniedError, ServiceError
 from app.services.account import AccountService, Session
-from app.services.models import FileSummary, RetrievedFile
+from app.services.models import FileSummary, KeyGrant, RetrievedFile
 from app.services.verification import Anchor, Fetched, verify_and_decrypt
 from app.storage import StorageError
 
@@ -71,6 +71,35 @@ class RequesterService:
         AccountService(session).require_registered()
         return session.chain.request_access(session.account(), file_id, on_submitted=on_submitted)
 
+    # ----------------------------------------------------------- key grant
+
+    def key_grant(self, file_id: bytes) -> KeyGrant:
+        """The authorized key information for `file_id`: what the contract stores
+        for me and since when. Raises AccessDeniedError unless the request is
+        Approved (or I own the file, in which case it is the owner's copy)."""
+        session = self._session
+        record = session.chain.get_file(file_id)
+        if record.owner == session.address:
+            return KeyGrant(
+                file_id=file_id,
+                recipient=session.address,
+                status=RequestStatus.NONE,
+                updated_at=record.registered_at,
+                is_owner_copy=True,
+                wrapped_key=record.owner_wrapped_key,
+            )
+        request = session.chain.get_request(file_id, session.address)
+        if request.status is not RequestStatus.APPROVED or not request.wrapped_key:
+            raise _access_denied(file_id, request.status)
+        return KeyGrant(
+            file_id=file_id,
+            recipient=session.address,
+            status=request.status,
+            updated_at=request.updated_at,
+            is_owner_copy=False,
+            wrapped_key=request.wrapped_key,
+        )
+
     # ------------------------------------------------------------ retrieve
 
     def retrieve(self, file_id: bytes, *, force_decrypt: bool = False) -> RetrievedFile:
@@ -102,10 +131,7 @@ class RequesterService:
             return record.owner_wrapped_key
         request = self._session.chain.get_request(record.file_id, me)
         if request.status is not RequestStatus.APPROVED or not request.wrapped_key:
-            raise AccessDeniedError(
-                f"Your access to file {short_hex(record.file_id)} is {request.status.label}; "
-                "only an approved request carries a file key"
-            )
+            raise _access_denied(record.file_id, request.status)
         return request.wrapped_key
 
 
@@ -131,6 +157,12 @@ def save_plaintext(retrieved: RetrievedFile, directory: Path) -> Path:
             raise ServiceError(f"Cannot save {candidate.name}: {exc.strerror or exc}") from exc
         return candidate
     raise ServiceError(f"Too many files named {name.name} in {directory}")
+
+
+def _access_denied(file_id: bytes, status: RequestStatus) -> AccessDeniedError:
+    return AccessDeniedError(
+        f"Your access to file {short_hex(file_id)} is {status.label}; only an approved request carries a file key"
+    )
 
 
 def _fetch(read: Callable[[], bytes]) -> Fetched:
