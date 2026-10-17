@@ -32,7 +32,7 @@ from app.chain import TransactionFailedError, TransactionTimeoutError
 from app.chain.client import SubmittedCallback, TxReceipt
 from app.chain.events import ChainEvent
 from app.config import AppConfig
-from app.gui import theme
+from app.gui import redraw, theme
 from app.gui.account_view import AccountPage
 from app.gui.audit_view import ActivityPage
 from app.gui.demo_view import DemoPage
@@ -120,6 +120,7 @@ class SecureFileShareApp(tk.Tk):
         self.rowconfigure(0, weight=1)
         self.toasts = Toasts(self)
         install_mousewheel(self)
+        self._repainter = redraw.install(self)
         self._place_window()
         self.protocol("WM_DELETE_WINDOW", self._close)
         self._show_login(network, alias)
@@ -509,11 +510,15 @@ class _Shell(tk.Frame):
     def show(self, key: str, **options: object) -> None:
         if key not in self.pages:
             return
-        if self._current and self._current != key:
-            self.pages[self._current].grid_remove()
-        self._current = key
         page = self.pages[key]
+        previous = self.pages.get(self._current) if self._current != key else None
+        self._current = key
         page.grid()
+        if previous is not None:
+            # Map the new page before the old one goes, so no redraw runs with
+            # neither page on screen (see redraw.py).
+            page.update_idletasks()
+            previous.grid_remove()
         self.sidebar.set_active("browse" if key == "verify" else key)
         page.on_show(**options)
         self._app.toasts.layout()
