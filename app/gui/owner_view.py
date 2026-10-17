@@ -15,7 +15,7 @@ from app.chain import RequestStatus
 from app.chain.client import TxReceipt
 from app.chain.events import ChainEvent
 from app.gui.dialogs import DialogField, confirm
-from app.gui.format import file_id_text, format_time, label_text, pending_count, short_hex, status_badge
+from app.gui.format import file_id_text, file_title, format_time, pending_count, short_hex, status_badge
 from app.gui.host import Host, Level
 from app.gui.layout import ListRow, ListView, field_row, section_title
 from app.gui.page import Page, clear, split
@@ -135,7 +135,8 @@ class FilesPage(Page):
 
         heading = tk.Frame(pane, background=SURFACE)
         heading.pack(fill="x")
-        label(heading, label_text(summary.label), style="heading", wrap=DETAIL_WRAP - 90).pack(side="left")
+        title = file_title(summary.name, summary.label)
+        label(heading, title, style="heading", wrap=DETAIL_WRAP - 90).pack(side="left")
         if not summary.active:
             Badge(heading, "Deactivated", "slate").pack(side="right")
 
@@ -147,6 +148,8 @@ class FilesPage(Page):
             row=1, column=1, sticky="w", pady=(0, px(4))
         )
         field_row(fields, 2, "Registered").configure(text=format_time(summary.registered_at))
+        public = field_row(fields, 3, "Public label", wrap=230)
+        public.configure(text=summary.label or "None", foreground=INK if summary.label else INK_3)
 
         hline(pane).pack(fill="x", pady=(px(18), px(16)))
         section_title(pane, "Access requests", count=str(len(requests)) if requests else "").pack(anchor="w")
@@ -219,7 +222,7 @@ class FilesPage(Page):
             "Approve access",
             "Approve this request?",
             [
-                DialogField("File", label_text(preview.label), emphasis=True),
+                DialogField("File", file_title(preview.name, preview.label), emphasis=True),
                 DialogField("File ID", file_id_text(preview.file_id), mono=True),
                 DialogField("Requester", preview.requester, mono=True),
                 DialogField("Encryption key", preview.enc_fingerprint, mono=True, emphasis=True),
@@ -242,7 +245,7 @@ class FilesPage(Page):
             "Reject request",
             "Reject this request?",
             [
-                DialogField("File", label_text(summary.label), emphasis=True),
+                DialogField("File", file_title(summary.name, summary.label), emphasis=True),
                 DialogField("Requester", request.requester, mono=True),
             ],
             "No key is shared. The rejection is recorded on-chain, and the requester may submit a new request.",
@@ -263,7 +266,7 @@ class FilesPage(Page):
             "Revoke access",
             "Revoke access for this requester?",
             [
-                DialogField("File", label_text(summary.label), emphasis=True),
+                DialogField("File", file_title(summary.name, summary.label), emphasis=True),
                 DialogField("Requester", request.requester, mono=True),
             ],
             "The wrapped key is deleted from contract storage. It remains in the history of the approval "
@@ -285,7 +288,7 @@ class FilesPage(Page):
             "Deactivate file",
             "Deactivate this file?",
             [
-                DialogField("File", label_text(summary.label), emphasis=True),
+                DialogField("File", file_title(summary.name, summary.label), emphasis=True),
                 DialogField("File ID", file_id_text(summary.file_id), mono=True),
             ],
             "New requests and approvals will no longer be accepted. Existing approvals remain valid. "
@@ -329,7 +332,8 @@ def _fill_row(row: ListRow, item: FileItem) -> None:
     summary, requests = item
     statuses = [r.status for r in requests]
     pending, approved = pending_count(statuses), statuses.count(RequestStatus.APPROVED)
-    row.parts["label"].configure(text=label_text(summary.label), foreground=INK if summary.label else INK_2)
+    known = summary.name or summary.label
+    row.parts["label"].configure(text=file_title(summary.name, summary.label), foreground=INK if known else INK_2)
     badge = row.parts["badge"]
     assert isinstance(badge, Badge)
     if not summary.active:

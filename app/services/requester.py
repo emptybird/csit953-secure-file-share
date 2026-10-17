@@ -18,6 +18,7 @@ from app.crypto.encoding import to_hex32
 from app.services import AccessDeniedError, ServiceError
 from app.services.account import AccountService, Session
 from app.services.models import FileSummary, KeyGrant, RetrievedFile
+from app.services.owner import original_name
 from app.services.verification import Anchor, Fetched, verify_and_decrypt
 from app.storage import StorageError
 
@@ -60,7 +61,7 @@ class RequesterService:
         record = chain.get_file(file_id)
         mine = record.owner == me
         status = RequestStatus.NONE if mine else chain.get_request(file_id, me).status
-        return FileSummary.from_chain(label, record, status, is_mine=mine)
+        return FileSummary.from_chain(label, record, status, is_mine=mine, name=original_name(self._session, record))
 
     # ------------------------------------------------------------- request
 
@@ -115,7 +116,7 @@ class RequesterService:
             manifest_hash=record.manifest_hash,
             owner_sig_key=owner_keys.sig_public_key,
         )
-        return verify_and_decrypt(
+        retrieved = verify_and_decrypt(
             anchor,
             _fetch(lambda: session.store.get_object(record.ct_hash.hex())),
             _fetch(lambda: session.store.get_manifest(to_hex32(file_id))),
@@ -124,6 +125,9 @@ class RequesterService:
             recipient=session.address,
             force_decrypt=force_decrypt,
         )
+        if retrieved.plaintext is not None:  # set only when every check passed
+            session.names[file_id] = retrieved.plaintext.header.name
+        return retrieved
 
     def _my_wrapped_key(self, record: FileRecord) -> bytes:
         me = self._session.address

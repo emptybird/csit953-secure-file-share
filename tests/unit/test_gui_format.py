@@ -15,11 +15,11 @@ from app.gui.format import (
     event_title,
     event_tone,
     file_id_text,
+    file_title,
     format_eth,
     format_size,
     format_time,
     is_low_balance,
-    label_text,
     parse_file_id,
     pending_count,
     plural,
@@ -53,9 +53,10 @@ def test_parse_file_id_rejects_anything_else(text: str) -> None:
     assert parse_file_id(text) is None
 
 
-def test_label_text_names_files_without_a_label() -> None:
-    assert label_text("Q3 report") == "Q3 report"
-    assert label_text("") == NO_LABEL == "Untitled file"
+def test_file_title_prefers_the_original_name() -> None:
+    assert file_title("quarterly report.pdf", "Q3 report") == "quarterly report.pdf"
+    assert file_title("", "Q3 report") == "Q3 report"
+    assert file_title("", "") == NO_LABEL == "Unlabelled file"
 
 
 def test_format_eth_is_exact() -> None:

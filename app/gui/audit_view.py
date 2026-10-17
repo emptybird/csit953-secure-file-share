@@ -14,7 +14,7 @@ from pathlib import Path
 from tkinter import filedialog
 
 from app.chain.events import ChainEvent, write_csv
-from app.gui.format import event_title, event_tone, label_text, plural, short_hex
+from app.gui.format import NO_LABEL, event_title, event_tone, file_title, plural, short_hex
 from app.gui.host import Host, Level
 from app.gui.layout import ListRow, ListView
 from app.gui.page import Page
@@ -68,7 +68,11 @@ class ActivityPage(Page):
         session = self.host.session
         me = session.address
         everything = session.events.events
-        labels = {e.file_id: e.label for e in everything if e.name == "FileRegistered"}
+        titles = {
+            e.file_id: file_title(session.names.get(e.file_id or b"", ""), e.label)
+            for e in everything
+            if e.name == "FileRegistered"
+        }
         owners = {e.file_id: e.args.get("owner") for e in everything if e.name == "FileRegistered"}
         if self._mine.get():
             shown = tuple(e for e in everything if e.account == me or owners.get(e.file_id) == me)
@@ -76,7 +80,7 @@ class ActivityPage(Page):
             shown = everything
         self._shown = shown
         latest = list(reversed(shown))[:MAX_ROWS]
-        self._list.set_items([(f"{e.tx_hash}/{e.log_index}", (e, _describe(e, labels, me))) for e in latest])
+        self._list.set_items([(f"{e.tx_hash}/{e.log_index}", (e, _describe(e, titles, me))) for e in latest])
         more = f" Showing the latest {MAX_ROWS}. Export CSV includes all events." if len(shown) > MAX_ROWS else ""
         self._count.configure(text=f"{plural(len(shown), 'event')} since block {session.chain.deploy_block}.{more}")
 
@@ -103,9 +107,9 @@ class ActivityPage(Page):
         )
 
 
-def _describe(event: ChainEvent, labels: dict[bytes | None, str], me: str) -> str:
+def _describe(event: ChainEvent, titles: dict[bytes | None, str], me: str) -> str:
     who = "you" if event.account == me else short_hex(event.account or "")
-    name = label_text(labels.get(event.file_id, "")) if event.file_id else ""
+    name = titles.get(event.file_id, NO_LABEL) if event.file_id else ""
     if event.name == "KeysRegistered":
         return f"By {who}"
     if event.name == "FileRegistered":

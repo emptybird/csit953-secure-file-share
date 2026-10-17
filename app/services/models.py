@@ -85,6 +85,7 @@ class ApprovalPreview:
     label: str
     requester: str
     enc_public_key: bytes
+    name: str = ""
 
     @property
     def enc_fingerprint(self) -> str:
@@ -96,7 +97,9 @@ class ApprovalPreview:
 
 @dataclass(frozen=True)
 class FileSummary:
-    """One row of the Browse catalogue or of My Files. `my_status` is NONE for my own files."""
+    """One row of the Browse catalogue or of My Files. `my_status` is NONE for my own files.
+    `label` is the public label from the chain. `name` is the original file name if this
+    session can read it (my own files, files I decrypted), otherwise empty."""
 
     file_id: bytes
     owner: str
@@ -105,9 +108,12 @@ class FileSummary:
     active: bool
     is_mine: bool
     my_status: RequestStatus
+    name: str = ""
 
     @classmethod
-    def from_chain(cls, label: str, record: FileRecord, my_status: RequestStatus, *, is_mine: bool) -> FileSummary:
+    def from_chain(
+        cls, label: str, record: FileRecord, my_status: RequestStatus, *, is_mine: bool, name: str = ""
+    ) -> FileSummary:
         return cls(
             file_id=record.file_id,
             owner=record.owner,
@@ -116,6 +122,7 @@ class FileSummary:
             active=record.active,
             is_mine=is_mine,
             my_status=my_status,
+            name=name,
         )
 
     @property

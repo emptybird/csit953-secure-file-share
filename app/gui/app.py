@@ -38,7 +38,7 @@ from app.gui.audit_view import ActivityPage
 from app.gui.demo_view import DemoPage
 from app.gui.dialogs import DialogField, confirm
 from app.gui.feedback import Banner, Toast, Toasts
-from app.gui.format import format_eth, is_low_balance, label_text, short_hex
+from app.gui.format import file_title, format_eth, is_low_balance, short_hex
 from app.gui.host import Action, Level
 from app.gui.layout import install_mousewheel
 from app.gui.login_view import LoginView
@@ -429,8 +429,11 @@ class SecureFileShareApp(tk.Tk):
         files = {e.file_id: e for e in session.events.events if e.name == "FileRegistered"}
         for event in events:
             registration = files.get(event.file_id)
-            name = label_text(registration.label) if registration else short_hex(event.file_id or b"")
             file_id = event.file_id
+            if registration:
+                name = file_title(session.names.get(file_id or b"", ""), registration.label)
+            else:
+                name = short_hex(file_id or b"")
             if event.name == "AccessRequested" and registration and registration.args["owner"] == me:
                 self.notify(
                     f"{short_hex(event.account or '')} requested access to {name}.",

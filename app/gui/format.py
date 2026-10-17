@@ -16,7 +16,7 @@ from app.crypto.encoding import to_hex32
 
 WEI_PER_ETH = Decimal(10) ** 18
 LOW_BALANCE_WEI = 10**16  # 0.01 ETH: a handful of transactions on Sepolia
-NO_LABEL = "Untitled file"
+NO_LABEL = "Unlabelled file"  # no public label, and the name is encrypted
 
 _FILE_ID = re.compile(r"(?:0x)?([0-9a-fA-F]{64})")
 _UNITS = ("bytes", "KB", "MB", "GB")
@@ -61,8 +61,10 @@ def parse_file_id(text: str) -> bytes | None:
     return bytes.fromhex(match.group(1)) if match else None
 
 
-def label_text(label: str) -> str:
-    return label or NO_LABEL
+def file_title(name: str, label: str) -> str:
+    """What lists and headings call a file: its original name when this session can
+    read it (my own files, files I decrypted), else its public label."""
+    return name or label or NO_LABEL
 
 
 def format_eth(wei: int, places: int = 4) -> str:

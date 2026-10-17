@@ -21,7 +21,7 @@ from tkinter import filedialog
 from app.chain import RequestStatus
 from app.gui import icons
 from app.gui.feedback import StepChain, StepState, SubCheck
-from app.gui.format import format_size, format_time, label_text, plural, short_hex
+from app.gui.format import file_title, format_size, format_time, plural, short_hex
 from app.gui.host import Host, Level
 from app.gui.layout import Panel, ScrollArea, field_row
 from app.gui.page import Page, clear
@@ -133,7 +133,8 @@ class VerifyPage(Page):
         self._summary = summary
         owner = "you" if summary.is_mine else short_hex(summary.owner)
         self.set_heading(
-            label_text(summary.label), f"Owned by {owner}. Registered {format_time(summary.registered_at)}."
+            file_title(summary.name, summary.label),
+            f"Owned by {owner}. Registered {format_time(summary.registered_at)}.",
         )
         self._run()
 
@@ -229,8 +230,9 @@ class VerifyPage(Page):
     def _finish(self, retrieved: RetrievedFile) -> None:
         self._running = False
         self._again.set_enabled(True)
-        if retrieved.ok:
+        if retrieved.ok and retrieved.plaintext is not None:
             self._retrieved = retrieved
+            self.set_heading(retrieved.plaintext.header.name)  # readable only now that it is decrypted
         self._show_result(retrieved=retrieved)
 
     # ---------------------------------------------------------- side panels

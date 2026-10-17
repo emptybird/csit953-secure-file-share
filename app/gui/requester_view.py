@@ -15,7 +15,7 @@ from app.chain import RequestStatus
 from app.chain.client import TxReceipt
 from app.chain.events import ChainEvent
 from app.crypto.encoding import fingerprint
-from app.gui.format import file_id_text, format_time, label_text, short_hex, status_badge
+from app.gui.format import file_id_text, file_title, format_time, short_hex, status_badge
 from app.gui.host import Host, Level
 from app.gui.layout import ListRow, ListView, field_row
 from app.gui.page import Page, clear, split
@@ -54,7 +54,7 @@ class BrowsePage(Page):
         self._loading = self._reload_again = False
         self._wanted: str | None = None
         self._search = Field(
-            self.actions, placeholder="Search by label, file ID or owner", width=280, on_change=self._searched
+            self.actions, placeholder="Search by name, file ID or owner", width=280, on_change=self._searched
         )
         self._search.pack(side="right")
 
@@ -124,11 +124,11 @@ class BrowsePage(Page):
             summary = self._files[key]
             if mine_only and (summary.is_mine or summary.my_status is RequestStatus.NONE):
                 continue
-            if self._query and self._query not in f"{key} {summary.label} {summary.owner}".lower():
+            if self._query and self._query not in f"{key} {summary.name} {summary.label} {summary.owner}".lower():
                 continue
             shown.append((key, summary))
         if self._query:
-            self._list.empty.set("No matching files", "Search by label, file ID or owner address.")
+            self._list.empty.set("No matching files", "Search by name, file ID or owner address.")
         elif mine_only:
             self._list.empty.set("No requests", "Select a file under All files to request access.")
         else:
@@ -161,7 +161,7 @@ class BrowsePage(Page):
             return
         pane = tk.Frame(body, background=SURFACE)
         pane.pack(fill="both", expand=True, padx=px(24), pady=(px(22), px(24)))
-        label(pane, label_text(summary.label), style="heading", wrap=DETAIL_WRAP).pack(anchor="w")
+        label(pane, file_title(summary.name, summary.label), style="heading", wrap=DETAIL_WRAP).pack(anchor="w")
 
         fields = tk.Frame(pane, background=SURFACE)
         fields.pack(fill="x", pady=(px(14), 0))
@@ -173,6 +173,9 @@ class BrowsePage(Page):
             row=2, column=1, sticky="w", pady=(0, px(4))
         )
         field_row(fields, 3, "Registered").configure(text=format_time(summary.registered_at))
+        if summary.name:  # the heading shows the private name, so also show what everyone sees
+            public = field_row(fields, 4, "Public label", wrap=230)
+            public.configure(text=summary.label or "None", foreground=INK if summary.label else INK_3)
 
         hline(pane).pack(fill="x", pady=(px(18), px(16)))
         heading = tk.Frame(pane, background=SURFACE)
@@ -255,7 +258,8 @@ def _build_row(row: ListRow) -> None:
 
 
 def _fill_row(row: ListRow, summary: FileSummary) -> None:
-    row.parts["label"].configure(text=label_text(summary.label), foreground=INK if summary.label else INK_2)
+    known = summary.name or summary.label
+    row.parts["label"].configure(text=file_title(summary.name, summary.label), foreground=INK if known else INK_2)
     badge = row.parts["badge"]
     assert isinstance(badge, Badge)
     if summary.is_mine:

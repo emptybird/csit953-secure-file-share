@@ -160,6 +160,44 @@ class TestHappyPath:
         assert RequesterService(carol).retrieve(protected.file_id).ok
 
 
+class TestFileNames:
+    """The original name exists only inside the encrypted object (DESIGN.md 2.1), so
+    only the owner and requesters who decrypted the file can show it."""
+
+    def test_owner_reads_names_back_after_a_restart(
+        self, make_session: Callable[..., Session], alice: Session, plaintext: Path
+    ) -> None:
+        protected = OwnerService(alice).protect_file(plaintext)
+        assert alice.names[protected.file_id] == plaintext.name
+        restarted = make_session(register=False, keys=alice.keys)  # same keystore, nothing in memory
+        mine = {f.file_id: f for f in OwnerService(restarted).my_files()}
+        assert (mine[protected.file_id].name, mine[protected.file_id].label) == (plaintext.name, "")
+
+    def test_requester_sees_the_name_only_after_decrypting(
+        self, alice: Session, bob: Session, protected: ProtectedFile, plaintext: Path
+    ) -> None:
+        browse, owner = RequesterService(bob), OwnerService(alice)
+        file_id = protected.file_id
+        browse.request_access(file_id)
+        preview = owner.prepare_approval(file_id, bob.address)
+        assert preview.name == plaintext.name
+        owner.approve(preview)
+        assert browse.file(file_id).name == ""
+        assert browse.retrieve(file_id).ok
+        assert browse.file(file_id).name == plaintext.name
+
+    def test_no_name_from_a_modified_object(
+        self, make_session: Callable[..., Session], alice: Session, protected: ProtectedFile
+    ) -> None:
+        path = alice.store.object_path(protected.ct_hash.hex())
+        data = bytearray(path.read_bytes())
+        data[100] ^= 0x01
+        path.write_bytes(bytes(data))
+        restarted = make_session(register=False, keys=alice.keys)
+        mine = {f.file_id: f for f in OwnerService(restarted).my_files()}
+        assert (mine[protected.file_id].name, mine[protected.file_id].label) == ("", "Q3 report")
+
+
 class TestRejectBranch:
     def test_rejected_then_asks_again(
         self, chain: ChainClient, alice: Session, bob: Session, protected: ProtectedFile

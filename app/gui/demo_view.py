@@ -27,7 +27,7 @@ from app.chain.events import ChainEvent
 from app.crypto import EncodingError
 from app.crypto.ecies import WRAPPED_KEY_LEN
 from app.crypto.encoding import canonical_json, normalize_address, to_hex32
-from app.gui.format import label_text, short_hex
+from app.gui.format import file_title, short_hex
 from app.gui.host import Host
 from app.gui.layout import ScrollArea
 from app.gui.page import Page
@@ -305,7 +305,7 @@ _TAMPER: dict[str, Callable[[Path, Path, Path], str]] = {
 
 def _describe(summary: FileSummary) -> str:
     owner = "you" if summary.is_mine else short_hex(summary.owner)
-    return f"{label_text(summary.label)} ({short_hex(summary.file_id)}, owner {owner})"
+    return f"{file_title(summary.name, summary.label)} ({short_hex(summary.file_id)}, owner {owner})"
 
 
 def _error_text(exc: BaseException) -> str:

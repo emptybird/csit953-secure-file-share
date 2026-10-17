@@ -149,8 +149,8 @@ class ProtectPage(Page):
         self._label = Field(form, placeholder="For example: Q3 report", width=FORM_WIDTH)
         self._label.pack(fill="x")
         note = (
-            f"The label is public on-chain (up to {MAX_LABEL_BYTES} bytes). Leave it blank to publish "
-            "no label. The file name is stored only inside the encrypted object."
+            f"The label is public on-chain (up to {MAX_LABEL_BYTES} bytes). The file name is encrypted "
+            "with the file, so only you and approved recipients can read it."
         )
         label(form, note, style="small", colour=INK_2, wrap=FORM_WIDTH).pack(anchor="w", pady=(px(8), 0))
         self._button = Button(form, "Protect and register", self._protect, kind="primary", size="lg", fill=True)

@@ -2,6 +2,8 @@
 
 A Session ties one unlocked keystore to one network: the chain client, the
 object store and the event log. Owner and requester services both work on it.
+It also remembers, in memory only, the original names of the files it has
+decrypted: a name exists only inside the encrypted object (DESIGN.md 2.1, 4.2).
 
 Keys are registered once per account. Registering different keys later is a
 rotation and breaks older files, so it needs an explicit `rotate=True`:
@@ -11,7 +13,7 @@ wrapped keys addressed to the old encPubKey only open with the old keystore.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from eth_account.signers.local import LocalAccount
 
@@ -31,6 +33,7 @@ class Session:
     chain: ChainClient
     store: ObjectStore
     events: EventLog
+    names: dict[bytes, str] = field(default_factory=dict, repr=False)  # fileId -> original name
 
     @property
     def address(self) -> str:

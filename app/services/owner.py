@@ -9,6 +9,11 @@ Approve:
     the requester's encPubKey is read from the chain, never from the requester,
     and shown as a fingerprint for confirmation. The DEK is recovered from the
     owner's own wrapped copy on-chain, so no DEK is ever stored locally.
+
+File names:
+    the original name exists only inside the encrypted object (DESIGN.md 2.1).
+    My files still shows it: the owner's client opens the object with the same
+    wrapped copy of the DEK and keeps the name in memory for the session.
 """
 
 from __future__ import annotations
@@ -22,7 +27,15 @@ from app.chain import RequestStatus
 from app.chain.client import FileRecord, SubmittedCallback, TxReceipt
 from app.chain.errors import short_hex
 from app.crypto import CryptoError, EncodingError, KeyUnwrapError, aead, ecies, signing
-from app.crypto.encoding import HASH_LEN, FileContext, compute_file_id, fingerprint, load_public_key, to_hex32
+from app.crypto.encoding import (
+    HASH_LEN,
+    FileContext,
+    compute_file_id,
+    fingerprint,
+    load_public_key,
+    sha256,
+    to_hex32,
+)
 from app.services import KeysNotRegisteredError, NotFileOwnerError, ServiceError, StaleApprovalError
 from app.services.account import AccountService, Session
 from app.services.models import (
@@ -33,6 +46,7 @@ from app.services.models import (
     ProtectedFile,
     ProtectStage,
 )
+from app.storage import StorageError
 from app.storage.object_store import MAX_OBJECT_BYTES
 
 MAX_LABEL_BYTES = 128  # SecureFileShare.MAX_LABEL_LEN
@@ -73,6 +87,7 @@ class OwnerService:
         report(ProtectStage.UPLOADED, f"ctHash {sealed.encrypted.ct_hash.hex()[:16]}…")
 
         receipt = self._register(sealed, label, report)
+        self._session.names[sealed.ctx.file_id] = path.name
         return ProtectedFile(
             file_id=sealed.ctx.file_id,
             name=path.name,
@@ -124,10 +139,12 @@ class OwnerService:
     def my_files(self) -> tuple[FileSummary, ...]:
         session = self._session
         session.events.refresh()
-        return tuple(
-            FileSummary.from_chain(event.label, session.chain.get_file(event.file_id), RequestStatus.NONE, is_mine=True)
-            for event in session.events.file_registrations(owner=session.address)
-        )
+        summaries = []
+        for event in session.events.file_registrations(owner=session.address):
+            record = session.chain.get_file(event.file_id)
+            name = original_name(session, record)
+            summaries.append(FileSummary.from_chain(event.label, record, RequestStatus.NONE, is_mine=True, name=name))
+        return tuple(summaries)
 
     def requests_for(self, file_id: bytes) -> tuple[AccessRequest, ...]:
         """Everyone who ever asked for `file_id`, with the current on-chain status."""
@@ -162,7 +179,13 @@ class OwnerService:
         enc_public_key = self._requester_enc_key(requester)
         session.events.refresh()
         label = next((e.label for e in session.events.file_registrations(session.address) if e.file_id == file_id), "")
-        return ApprovalPreview(file_id=file_id, label=label, requester=requester, enc_public_key=enc_public_key)
+        return ApprovalPreview(
+            file_id=file_id,
+            label=label,
+            requester=requester,
+            enc_public_key=enc_public_key,
+            name=original_name(session, record),
+        )
 
     def approve(self, preview: ApprovalPreview, *, on_submitted: SubmittedCallback | None = None) -> TxReceipt:
         """Wrap the DEK for the key the owner confirmed and call approveAccess."""
@@ -213,6 +236,36 @@ class OwnerService:
         except CryptoError as exc:
             raise ServiceError(f"The encryption key registered by {requester} is invalid: {exc}") from exc
         return registered.enc_public_key
+
+
+def original_name(session: Session, record: FileRecord) -> str:
+    """The file's original name if this session can read it, otherwise "".
+
+    For my own files the name is read from the encrypted object with my wrapped
+    copy of the file key, once per session; it stays unknown while the stored
+    object is missing or modified. For other files it is known only after a
+    retrieve in this session passed every check (RequesterService.retrieve)."""
+    if record.file_id in session.names:
+        return session.names[record.file_id]
+    if record.owner != session.address:
+        return ""
+    name = _read_own_name(session, record)
+    if name:
+        session.names[record.file_id] = name
+    return name
+
+
+def _read_own_name(session: Session, record: FileRecord) -> str:
+    keys = session.keys
+    ctx = session.file_context(record.file_id, record.owner)
+    try:
+        data = session.store.get_object(record.ct_hash.hex())
+        if sha256(data) != record.ct_hash:  # what V1 checks: storage changed the object
+            return ""
+        dek = ecies.unwrap_key(record.owner_wrapped_key, keys.enc_key, ctx, keys.address)
+        return aead.decrypt_file(dek, ctx, data).header.name
+    except (CryptoError, StorageError):
+        return ""
 
 
 def _read_file(path: Path) -> bytes:
