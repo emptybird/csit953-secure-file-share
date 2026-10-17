@@ -62,9 +62,7 @@ class FilePicker(tk.Canvas):
     """A dashed drop-zone style button that opens the file dialog."""
 
     def __init__(self, parent: tk.Misc, on_pick: Callable[[], None]) -> None:
-        super().__init__(
-            parent, height=px(92), width=px(FORM_WIDTH), background=SURFACE, highlightthickness=0, cursor="hand2"
-        )
+        super().__init__(parent, height=px(92), width=px(FORM_WIDTH), background=SURFACE, highlightthickness=0)
         self._on_pick = on_pick
         self._path: Path | None = None
         self._size = 0

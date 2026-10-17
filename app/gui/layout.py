@@ -234,7 +234,6 @@ class ListRow(tk.Frame):
             widget.bind("<Button-1>", lambda _e: on_click(self.key), add="+")
             widget.bind("<Enter>", lambda _e: self._set_hover(True), add="+")
             widget.bind("<Leave>", lambda _e: self.after_idle(self._check_hover), add="+")
-            widget.configure(cursor="hand2")
 
     def _check_hover(self) -> None:
         if not self.winfo_exists():

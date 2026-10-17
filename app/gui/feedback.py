@@ -177,7 +177,7 @@ class _Step(tk.Frame):
         colour = (
             RED if state is StepState.FAILED else ACCENT if on_click else INK_3 if state is StepState.WAITING else INK_2
         )
-        self.detail.configure(text=text, foreground=colour, cursor="hand2" if on_click else "")
+        self.detail.configure(text=text, foreground=colour)
         self.detail.unbind("<Button-1>")
         if on_click is not None:
             self.detail.bind("<Button-1>", lambda _e: on_click())

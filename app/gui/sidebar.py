@@ -46,7 +46,6 @@ class NavItem(tk.Canvas):
             highlightthickness=0,
             borderwidth=0,
             takefocus=1,
-            cursor="hand2",
         )
         self.key, self._text, self._icon = key, text, icon
         self._active = self._hover = self._focus = False

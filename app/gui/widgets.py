@@ -145,7 +145,6 @@ class Button(_CanvasControl):
         self._pad, self._font, self._fill = px(pad), font_name, fill
         self._height = px(height) + 2 * px(RING)
         super().__init__(parent, width=self._natural_width(), height=self._height)
-        self.configure(cursor="hand2")
         self.bind("<ButtonPress-1>", lambda _e: self._set_flags(pressed=True) if self._enabled else None)
         self.bind("<ButtonRelease-1>", self._released)
         self.bind("<KeyPress-space>", lambda _e: self.invoke())
@@ -175,7 +174,7 @@ class Button(_CanvasControl):
     def set_enabled(self, enabled: bool) -> None:
         if enabled != self._enabled:
             self._enabled = enabled
-            self.configure(cursor="hand2" if enabled else "arrow", takefocus=1 if enabled else 0)
+            self.configure(takefocus=1 if enabled else 0)
             self.redraw()
 
     @property
@@ -359,7 +358,6 @@ class Select(_CanvasControl):
         self._choices = list(options)
         self._var = tk.StringVar(self, value=value or (self._choices[0][0] if self._choices else ""))
         self._on_change = on_change
-        self.configure(cursor="hand2")
         self.bind("<Button-1>", lambda _e: self._open())
         self.bind("<KeyPress-space>", lambda _e: self._open())
         self.bind("<Down>", lambda _e: self._open())
@@ -427,7 +425,6 @@ class Segmented(_CanvasControl):
         self._widths = [measure("small_strong", label) + 2 * px(16) for _, label in self._choices]
         width = sum(self._widths) + 2 * px(3) + 2 * px(RING)
         super().__init__(parent, width=width, height=px(32) + 2 * px(RING))
-        self.configure(cursor="hand2")
         self.bind("<Button-1>", self._clicked)
         self.bind("<Left>", lambda _e: self._step(-1))
         self.bind("<Right>", lambda _e: self._step(1))
@@ -494,11 +491,9 @@ class Checkbox(tk.Frame):
         self._command = command
         self._focus = False
         size = px(18)
-        self._box = tk.Canvas(
-            self, width=size, height=size, background=surface, highlightthickness=0, takefocus=1, cursor="hand2"
-        )
+        self._box = tk.Canvas(self, width=size, height=size, background=surface, highlightthickness=0, takefocus=1)
         self._box.pack(side="left")
-        self._label = tk.Label(self, text=text, background=surface, foreground=INK, font=font("small"), cursor="hand2")
+        self._label = tk.Label(self, text=text, background=surface, foreground=INK, font=font("small"))
         self._label.pack(side="left", padx=(px(7), 0))
         for widget in (self, self._box, self._label):
             widget.bind("<Button-1>", lambda _e: self.toggle())
@@ -609,7 +604,6 @@ class Link(tk.Label):
             background=surface_of(parent),
             foreground=ACCENT,
             font=font(self._font_name),
-            cursor="hand2",
             padx=0,
             pady=0,
         )
