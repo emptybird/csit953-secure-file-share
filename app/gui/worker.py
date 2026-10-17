@@ -39,7 +39,7 @@ def describe_error(exc: BaseException) -> str:
     if isinstance(exc, USER_ERRORS):
         return str(exc)
     log.error("Unexpected error in a background job", exc_info=exc)
-    return f"Unexpected error ({type(exc).__name__}). The details were written to the log."
+    return f"Unexpected error ({type(exc).__name__}). Details were written to the log."
 
 
 class Worker:

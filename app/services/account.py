@@ -96,6 +96,6 @@ class AccountService:
         their signatures; requesters need it so they can open the wrapped key they get."""
         status = self.key_status()
         if status is KeyStatus.NOT_REGISTERED:
-            raise KeysNotRegisteredError("Register your public keys first (Register Keys)")
+            raise KeysNotRegisteredError("Register your public keys first.")
         if status is KeyStatus.MISMATCH:
             raise KeyMismatchError("The keys registered on-chain for this account are not the keys in this keystore")

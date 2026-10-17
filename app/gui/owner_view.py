@@ -27,10 +27,10 @@ from app.services.owner import OwnerService
 
 DETAIL_WRAP = 330
 _HINTS = {
-    RequestStatus.PENDING: "Approving encrypts the file key to this key.",
-    RequestStatus.APPROVED: "Can download and decrypt the file.",
-    RequestStatus.REJECTED: "Rejected. They can ask again.",
-    RequestStatus.REVOKED: "Revoked. They can ask again.",
+    RequestStatus.PENDING: "Approval encrypts the file key to this key.",
+    RequestStatus.APPROVED: "Can retrieve and decrypt the file.",
+    RequestStatus.REJECTED: "The requester may submit a new request.",
+    RequestStatus.REVOKED: "Wrapped key deleted. The requester may submit a new request.",
 }
 
 FileItem = tuple[FileSummary, tuple[AccessRequest, ...]]
@@ -40,7 +40,7 @@ class FilesPage(Page):
     key = "files"
 
     def __init__(self, parent: tk.Misc, host: Host) -> None:
-        super().__init__(parent, host, "My files", "Files you encrypted and registered, and who has asked for them.")
+        super().__init__(parent, host, "My files", "Files you have protected and the access requests for each.")
         self._owner = OwnerService(host.session)
         self._items: dict[str, FileItem] = {}
         self._loading = self._reload_again = False
@@ -55,7 +55,7 @@ class FilesPage(Page):
             build=_build_row,
             fill=_fill_row,
             on_select=lambda _key: self._show_detail(),
-            empty=("files", "No files yet", "Protect a file to encrypt it, sign it and register it on-chain."),
+            empty=("files", "No protected files", "Protect a file to encrypt, sign and register it on-chain."),
         )
         self._list.empty.add_action("Protect a file", lambda: host.navigate("protect"), icon="plus")
         self._list.pack(fill="both", expand=True)
@@ -125,7 +125,7 @@ class FilesPage(Page):
         clear(body)
         item = self._selected()
         if item is None:
-            text = "Select a file to see who asked for it." if self._items else ""
+            text = "Select a file to view its access requests." if self._items else ""
             label(body, text, style="small", colour=INK_3, wrap=DETAIL_WRAP).pack(anchor="w", padx=px(24), pady=px(28))
             return
         summary, requests = item
@@ -151,7 +151,7 @@ class FilesPage(Page):
         hline(pane).pack(fill="x", pady=(px(18), px(16)))
         section_title(pane, "Access requests", count=str(len(requests)) if requests else "").pack(anchor="w")
         if not requests:
-            text = "Nobody has asked yet. Share the file ID with the person who needs the file."
+            text = "No requests. Share the file ID with the intended recipient."
             label(pane, text, style="small", colour=INK_2, wrap=DETAIL_WRAP).pack(anchor="w", pady=(px(8), 0))
         for request in requests:
             self._request_block(pane, summary, request, idle)
@@ -163,7 +163,7 @@ class FilesPage(Page):
             )
             danger.set_enabled(idle)
             danger.pack(anchor="w")
-            note = "Stops new requests. People you already approved keep their access."
+            note = "Blocks new requests. Existing approvals remain valid."
             label(pane, note, style="small", colour=INK_3, wrap=DETAIL_WRAP).pack(anchor="w", pady=(px(4), 0))
 
     def _request_block(self, pane: tk.Frame, summary: FileSummary, request: AccessRequest, idle: bool) -> None:
@@ -178,7 +178,7 @@ class FilesPage(Page):
         key_row = tk.Frame(inner, background=SURFACE)
         key_row.pack(fill="x", pady=(px(8), 0))
         label(key_row, "Key", style="small", colour=INK_2).pack(side="left")
-        fingerprint = request.enc_fingerprint or "no keys registered"
+        fingerprint = request.enc_fingerprint or "No keys registered"
         label(key_row, fingerprint, style="mono_small", colour=INK).pack(side="left", padx=(px(8), 0))
         hint = f"{_HINTS.get(request.status, '')} Updated {format_time(request.updated_at)}."
         label(inner, hint, style="small", colour=INK_3, wrap=DETAIL_WRAP - 30).pack(anchor="w", pady=(px(6), 0))
@@ -217,15 +217,15 @@ class FilesPage(Page):
         if not confirm(
             self,
             "Approve access",
-            "Share this file?",
+            "Approve this request?",
             [
                 DialogField("File", label_text(preview.label), emphasis=True),
                 DialogField("File ID", file_id_text(preview.file_id), mono=True),
                 DialogField("Requester", preview.requester, mono=True),
-                DialogField("Their encryption key", preview.enc_fingerprint, mono=True, emphasis=True),
+                DialogField("Encryption key", preview.enc_fingerprint, mono=True, emphasis=True),
             ],
-            "The file key will be encrypted (ECIES) to the key this address registered on-chain. "
-            "Check the fingerprint with the requester in person or over another channel first.",
+            "The file key will be encrypted (ECIES) to the key registered for this address. "
+            "Confirm the fingerprint with the requester through a separate channel before approving.",
             "Approve",
         ):
             return
@@ -245,7 +245,7 @@ class FilesPage(Page):
                 DialogField("File", label_text(summary.label), emphasis=True),
                 DialogField("Requester", request.requester, mono=True),
             ],
-            "No key is shared. The rejection is recorded on-chain, and the requester can ask again.",
+            "No key is shared. The rejection is recorded on-chain, and the requester may submit a new request.",
             "Reject",
             danger=True,
         ):
@@ -261,13 +261,13 @@ class FilesPage(Page):
         if not confirm(
             self,
             "Revoke access",
-            "Revoke this person's access?",
+            "Revoke access for this requester?",
             [
                 DialogField("File", label_text(summary.label), emphasis=True),
                 DialogField("Requester", request.requester, mono=True),
             ],
-            "The wrapped key is deleted from contract storage. It stays in the history of the approve "
-            "transaction, and anything the requester already decrypted stays with them.",
+            "The wrapped key is deleted from contract storage. It remains in the history of the approval "
+            "transaction, and copies the requester has already decrypted are not affected.",
             "Revoke access",
             danger=True,
         ):
@@ -283,13 +283,13 @@ class FilesPage(Page):
         if not confirm(
             self,
             "Deactivate file",
-            "Stop accepting requests for this file?",
+            "Deactivate this file?",
             [
                 DialogField("File", label_text(summary.label), emphasis=True),
                 DialogField("File ID", file_id_text(summary.file_id), mono=True),
             ],
-            "Nobody can request or be approved for this file any more. Existing approvals stay valid. "
-            "This cannot be undone.",
+            "New requests and approvals will no longer be accepted. Existing approvals remain valid. "
+            "This action cannot be undone.",
             "Deactivate file",
             danger=True,
         ):

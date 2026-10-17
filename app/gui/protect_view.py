@@ -46,10 +46,10 @@ from app.services.owner import MAX_FILE_BYTES, MAX_LABEL_BYTES, OwnerService
 FORM_WIDTH = 380
 STEPS_WRAP = 400
 _STEPS = (
-    ("encrypt", "Encrypt with AES-256-GCM", "A new 256-bit key is made for this file only."),
-    ("sign", "Sign the manifest", "Your signing key signs the ciphertext hash and a salted digest of the content."),
-    ("upload", "Upload the ciphertext", "Storage receives only the encrypted object and the signed manifest."),
-    ("register", "Register on-chain", "registerFile records the hashes and your own wrapped copy of the key."),
+    ("encrypt", "Encrypt with AES-256-GCM", "A new 256-bit file key is generated for this file only."),
+    ("sign", "Sign the manifest", "Your signing key signs the ciphertext hash and a salted content digest."),
+    ("upload", "Upload the ciphertext", "Only the encrypted object and the signed manifest are stored."),
+    ("register", "Register on-chain", "registerFile records the hashes and your wrapped copy of the file key."),
 )
 _STAGE_DONE = {
     ProtectStage.ENCRYPTED: ("encrypt", "sign"),
@@ -124,7 +124,7 @@ class ProtectPage(Page):
             parent,
             host,
             "Protect a file",
-            "The file is encrypted and signed on this computer. Only ciphertext leaves it.",
+            "Files are encrypted and signed on this computer. Only ciphertext is uploaded.",
         )
         self._owner = OwnerService(host.session)
         self._chosen: Path | None = None
@@ -151,8 +151,8 @@ class ProtectPage(Page):
         self._label = Field(form, placeholder="For example: Q3 report", width=FORM_WIDTH)
         self._label.pack(fill="x")
         note = (
-            f"Anyone can read the label on-chain (up to {MAX_LABEL_BYTES} bytes). Leave it empty to keep "
-            "the file anonymous. The file name itself stays inside the encryption."
+            f"The label is public on-chain (up to {MAX_LABEL_BYTES} bytes). Leave it blank to publish "
+            "no label. The file name is stored only inside the encrypted object."
         )
         label(form, note, style="small", colour=INK_2, wrap=FORM_WIDTH).pack(anchor="w", pady=(px(8), 0))
         self._button = Button(form, "Protect and register", self._protect, kind="primary", size="lg", fill=True)
@@ -162,20 +162,20 @@ class ProtectPage(Page):
         self._error.pack(anchor="w", pady=(px(10), 0))
 
     def _build_steps(self, column: tk.Frame) -> None:
-        label(column, "What happens", style="heading").pack(anchor="w", pady=(0, px(16)))
+        label(column, "Steps", style="heading").pack(anchor="w", pady=(0, px(16)))
         self._steps = StepChain(column, _STEPS, wrap=STEPS_WRAP)
         self._steps.pack(anchor="w", fill="x")
         self._result = Panel(column, padding=20, background=SUCCESS_SOFT, border=SUCCESS_SOFT)
         result = self._result.body
         label(result, "Registered", style="heading").pack(anchor="w")
-        text = "Share the file ID with the people who need the file. They request access with it."
+        text = "Share the file ID with the intended recipients. They use it to request access."
         label(result, text, style="small", colour=INK_2, wrap=STEPS_WRAP).pack(anchor="w", pady=(px(4), px(10)))
         self._result_id = label(result, "", style="mono", wrap=STEPS_WRAP)
         self._result_id.pack(anchor="w")
         buttons = tk.Frame(result, background=SUCCESS_SOFT)
         buttons.pack(anchor="w", pady=(px(14), 0))
         Button(buttons, "Copy file ID", self._copy_id, kind="secondary", size="sm", icon="copy").pack(side="left")
-        Link(buttons, "Go to My files", self._open_file).pack(side="left", padx=(px(16), 0))
+        Link(buttons, "Open in My files", self._open_file).pack(side="left", padx=(px(16), 0))
         self._protected: ProtectedFile | None = None
 
     # --------------------------------------------------------------- actions
@@ -229,13 +229,13 @@ class ProtectPage(Page):
         if stage in _STAGE_DONE:
             done, running = _STAGE_DONE[stage]
             self._steps.set(done, StepState.DONE, _describe(stage, detail))
-            self._steps.set(running, StepState.RUNNING, "Sending the transaction…" if running == "register" else "")
+            self._steps.set(running, StepState.RUNNING, "Submitting the transaction…" if running == "register" else "")
         elif stage is ProtectStage.SUBMITTED:
             self._tx_hash = detail
             self._steps.set(
                 "register",
                 StepState.RUNNING,
-                f"Sent as {short_hex(detail, 8, 6)}. Waiting for a block.",
+                f"Submitted as {short_hex(detail, 8, 6)}. Awaiting confirmation.",
                 on_click=self.host.tx_action(detail)[1],
             )
         elif stage is ProtectStage.CONFIRMED:
@@ -287,4 +287,4 @@ def _describe(stage: ProtectStage, detail: str) -> str:
         return f"{detail.replace('AES-256-GCM, ', '')} of ciphertext, with a 16-byte authentication tag."
     if stage is ProtectStage.SIGNED:
         return f"Manifest hash {detail.removeprefix('manifest ')}"
-    return f"Stored under its hash {detail.removeprefix('ctHash ')}"
+    return f"Stored under hash {detail.removeprefix('ctHash ')}"

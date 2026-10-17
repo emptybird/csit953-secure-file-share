@@ -35,11 +35,11 @@ class ActivityPage(Page):
             parent,
             host,
             "Activity",
-            "Every row is a transaction the contract recorded. Nobody can edit or delete them.",
+            "Each entry is a transaction recorded by the contract. Entries cannot be edited or deleted.",
         )
         self._shown: tuple[ChainEvent, ...] = ()
         Button(self.actions, "Export CSV", self._export, icon="download", size="sm").pack(side="right")
-        self._mine = Checkbox(self.actions, "Only events about me", command=lambda _v: self.reload())
+        self._mine = Checkbox(self.actions, "Only my events", command=lambda _v: self.reload())
         self._mine.pack(side="right", padx=(0, px(18)))
         hline(self.content).pack(fill="x")
         self._list: ListView[ActivityItem] = ListView(
@@ -48,7 +48,7 @@ class ActivityPage(Page):
             fill=_fill_row,
             on_activate=self._open,
             selectable=False,
-            empty=("activity", "No activity yet", "Registrations, requests and decisions appear here as they happen."),
+            empty=("activity", "No activity", "Registrations, requests and decisions appear here once recorded."),
         )
         self._list.pack(fill="both", expand=True)
         self._count = label(self.content, "", style="small", colour=INK_3)
@@ -56,7 +56,7 @@ class ActivityPage(Page):
         host.worker.submit(
             host.session.events.refresh,
             lambda _new: self.reload(),
-            lambda exc: host.notify(describe_error(exc), Level.ERROR, title="Could not read the activity"),
+            lambda exc: host.notify(describe_error(exc), Level.ERROR, title="Could not read the activity log"),
             owner=self,
             name="events",
         )
@@ -77,7 +77,7 @@ class ActivityPage(Page):
         self._shown = shown
         latest = list(reversed(shown))[:MAX_ROWS]
         self._list.set_items([(f"{e.tx_hash}/{e.log_index}", (e, _describe(e, labels, me))) for e in latest])
-        more = f" Showing the latest {MAX_ROWS}; Export CSV has all of them." if len(shown) > MAX_ROWS else ""
+        more = f" Showing the latest {MAX_ROWS}. Export CSV includes all events." if len(shown) > MAX_ROWS else ""
         self._count.configure(text=f"{plural(len(shown), 'event')} since block {session.chain.deploy_block}.{more}")
 
     def _open(self, key: str) -> None:
@@ -87,7 +87,7 @@ class ActivityPage(Page):
         events = self._shown
         path = filedialog.asksaveasfilename(
             parent=self,
-            title="Export the activity",
+            title="Export activity log",
             initialfile=f"sfs-activity-{self.host.app_config.network.name}.csv",
             defaultextension=".csv",
             filetypes=[("CSV", "*.csv")],

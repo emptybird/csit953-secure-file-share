@@ -52,7 +52,7 @@ class DemoPage(Page):
             parent,
             host,
             "Security demo",
-            "Attack the system on purpose and watch where it stops. For the live demo only.",
+            "Simulated attacks that show which control stops each one. For demonstration only.",
         )
         self._files: list[FileSummary] = []
         self._loading = False
@@ -76,18 +76,18 @@ class DemoPage(Page):
     def _build_tamper(self, column: tk.Frame) -> None:
         label(column, "Tamper with storage", style="heading").pack(anchor="w")
         text = (
-            "Storage is untrusted. Change what it holds, then open Retrieve and verify for the file "
-            "and see which check catches it."
+            "Storage is untrusted. Modify a stored object, then run Retrieve and verify on the file "
+            "to see which check detects the change."
         )
         label(column, text, style="small", colour=INK_2, wrap=COLUMN_WRAP).pack(anchor="w", pady=(px(4), px(18)))
         label(column, "File", style="small_strong").pack(anchor="w", pady=(0, px(6)))
         self._tamper_file = Select(column, [], width=COLUMN_WRAP)
         self._tamper_file.pack(fill="x")
         actions = (
-            ("Flip one byte of the ciphertext", "flip", "V1 fails. With forced decryption, V5 fails too."),
-            ("Change the digest in the manifest", "manifest", "V2 and V4 fail."),
-            ("Delete the ciphertext", "delete", "V1 fails: the object is missing."),
-            ("Restore originals", "restore", "Every check passes again."),
+            ("Flip one bit of the ciphertext", "flip", "Expected: V1 fails; with forced decryption, V5 also fails."),
+            ("Change the digest in the manifest", "manifest", "Expected: V2 and V4 fail."),
+            ("Delete the ciphertext", "delete", "Expected: V1 fails because the object is missing."),
+            ("Restore the originals", "restore", "Expected: all checks pass."),
         )
         for text, action, expect in actions:
             row = tk.Frame(column, background=SURFACE)
@@ -99,20 +99,23 @@ class DemoPage(Page):
         self._verify_link = Link(column, "Open Retrieve and verify", self._open_verify)
 
     def _build_attack(self, column: tk.Frame) -> None:
-        label(column, "Approve someone else's file", style="heading").pack(anchor="w")
-        text = "The contract, not this app, decides who may approve. Try approveAccess on a file you do not own."
+        label(column, "Approve another owner's file", style="heading").pack(anchor="w")
+        text = (
+            "Approval rights are enforced by the contract, not by this client. "
+            "Call approveAccess on a file owned by another account."
+        )
         label(column, text, style="small", colour=INK_2, wrap=COLUMN_WRAP).pack(anchor="w", pady=(px(4), px(18)))
-        label(column, "File owned by someone else", style="small_strong").pack(anchor="w", pady=(0, px(6)))
+        label(column, "File owned by another account", style="small_strong").pack(anchor="w", pady=(0, px(6)))
         self._attack_file = Select(column, [], width=COLUMN_WRAP, on_change=lambda _v: self._fill_requesters())
         self._attack_file.pack(fill="x")
         label(column, "Requester to approve", style="small_strong").pack(anchor="w", pady=(px(16), px(6)))
         self._requester = Field(column, width=COLUMN_WRAP, mono=True)
         self._requester.pack(fill="x")
-        hint = "Your own address approves your own request (S2); another requester is S1."
+        hint = "Your own address tests self-approval (S2); any other address tests S1."
         label(column, hint, style="small", colour=INK_3, wrap=COLUMN_WRAP).pack(anchor="w", pady=(px(6), 0))
-        self._broadcast = Checkbox(column, "Broadcast anyway, so the failed transaction is mined (costs gas)")
+        self._broadcast = Checkbox(column, "Broadcast anyway so the reverted transaction is mined (uses gas)")
         self._broadcast.pack(anchor="w", pady=(px(16), 0))
-        self._attack_button = Button(column, "Try approveAccess", self._attack, kind="danger")
+        self._attack_button = Button(column, "Call approveAccess", self._attack, kind="danger")
         self._attack_button.pack(anchor="w", pady=(px(18), 0))
         self._attack_result = label(column, "", style="small", colour=INK_2, wrap=COLUMN_WRAP)
         self._attack_result.pack(anchor="w", pady=(px(16), 0))
@@ -156,14 +159,14 @@ class DemoPage(Page):
     def _tamper(self, action: str) -> None:
         summary = self._file(self._tamper_file)
         if summary is None:
-            self._tamper_result.configure(text="Choose a file first.", foreground=INK_2)
+            self._tamper_result.configure(text="Select a file first.", foreground=INK_2)
             return
         session = self.host.session
 
         def job() -> str:
             store = session.store
             if not isinstance(store, LocalObjectStore):
-                raise ServiceError("Tampering needs the local directory store")
+                raise ServiceError("Tampering requires the local directory store.")
             record = session.chain.get_file(summary.file_id)
             obj = store.object_path(record.ct_hash.hex())
             manifest = store.manifest_path(to_hex32(summary.file_id))
@@ -217,16 +220,19 @@ class DemoPage(Page):
 
     def _accepted(self, receipt: TxReceipt) -> None:
         self._attack_result.configure(
-            text=f"The contract accepted the call ({receipt.tx_hash}). This is a bug.", foreground=RED
+            text=f"The contract accepted the call ({receipt.tx_hash}). Access control has failed.", foreground=RED
         )
 
     def _blocked(self, exc: BaseException) -> None:
         if isinstance(exc, TransactionFailedError):
             reason = f" {exc.revert}." if exc.revert else ""
-            text = f"Blocked: the transaction was mined and reverted (status Fail).{reason} Tx {short_hex(exc.tx_hash, 8, 6)}."
+            text = (
+                f"Blocked. The transaction was mined and reverted.{reason} "
+                f"Transaction {short_hex(exc.tx_hash, 8, 6)}."
+            )
             self._attack_result.configure(text=text, foreground=SUCCESS)
         elif isinstance(exc, ContractRevertError):
-            text = f"Blocked before sending: {exc.error_name}. {exc}."
+            text = f"Blocked before broadcast: {exc.error_name}. {exc}."
             self._attack_result.configure(text=text, foreground=SUCCESS)
         else:
             self._attack_result.configure(text=describe_error(exc), foreground=RED)
@@ -243,8 +249,8 @@ def _flip_byte(root: Path, obj: Path, _manifest: Path) -> str:
     data[index] ^= 0x01
     obj.write_bytes(bytes(data))
     return (
-        f"Flipped one bit of byte {index:,} in {obj.relative_to(root)} "
-        f"(0x{before:02x} to 0x{data[index]:02x}). Expect V1 to fail; with forced decryption, V5 (GCM tag) too."
+        f"Flipped one bit of byte {index:,} in {obj.relative_to(root)} (0x{before:02x} to 0x{data[index]:02x}). "
+        "Expected: V1 fails; with forced decryption, V5 (GCM tag) also fails."
     )
 
 
@@ -255,9 +261,9 @@ def _edit_manifest(root: Path, _obj: Path, manifest: Path) -> str:
     value["manifest"]["ptDigest"] = ("1" if digest[0] == "0" else "0") + digest[1:]
     manifest.write_bytes(canonical_json(value))
     return (
-        f"Changed the first digit of ptDigest in {manifest.relative_to(root)} and kept the old signature. "
-        "Expect V2 (hash differs from the chain) and V4 (signature no longer matches) to fail; "
-        "with forced decryption, V6 too."
+        f"Changed the first digit of ptDigest in {manifest.relative_to(root)} without re-signing. "
+        "Expected: V2 (hash differs from the chain) and V4 (signature mismatch) fail; "
+        "with forced decryption, V6 also fails."
     )
 
 
@@ -265,8 +271,8 @@ def _delete_object(root: Path, obj: Path, _manifest: Path) -> str:
     _backup(obj)
     obj.unlink(missing_ok=True)
     return (
-        f"Deleted {obj.relative_to(root)}. Expect V1 to fail because the object is missing. "
-        "Storage can delete files; the client detects it but cannot prevent it."
+        f"Deleted {obj.relative_to(root)}. Expected: V1 fails because the object is missing. "
+        "Storage can delete data; the client detects the loss but cannot prevent it."
     )
 
 
@@ -278,8 +284,8 @@ def _restore(root: Path, obj: Path, manifest: Path) -> str:
             os.replace(backup, path)
             restored.append(str(path.relative_to(root)))
     if not restored:
-        return "Nothing to restore: this file was not changed."
-    return "Restored " + " and ".join(restored) + ". Every check should pass again."
+        return "Nothing to restore. This file is unchanged."
+    return "Restored " + " and ".join(restored) + ". All checks should pass."
 
 
 def _backup(path: Path) -> None:

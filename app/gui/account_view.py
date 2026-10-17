@@ -19,9 +19,9 @@ from app.services.models import KeyStatus
 
 WIDTH = 640
 _KEY_STATUS = {
-    KeyStatus.NOT_REGISTERED: ("Not registered", "amber", "Others cannot verify your files or send you keys yet."),
-    KeyStatus.MATCHES: ("Registered", "success", "The keys on-chain match this keystore."),
-    KeyStatus.MISMATCH: ("Different keys on-chain", "red", "This address registered other keys earlier."),
+    KeyStatus.NOT_REGISTERED: ("Not registered", "amber", "Required for signing files and receiving shared files."),
+    KeyStatus.MATCHES: ("Registered", "success", "The on-chain keys match this keystore."),
+    KeyStatus.MISMATCH: ("Mismatch", "red", "The on-chain keys for this address differ from this keystore."),
 }
 
 
@@ -30,7 +30,7 @@ class AccountPage(Page):
 
     def __init__(self, parent: tk.Misc, host: Host) -> None:
         super().__init__(
-            parent, host, "Account", "Your keys, network and balance. Private keys never leave the keystore."
+            parent, host, "Account", "Keys, network and balance. Private keys never leave the keystore."
         )
         hline(self.content).pack(fill="x")
         scroll = ScrollArea(self.content, background=SURFACE)
@@ -59,8 +59,8 @@ class AccountPage(Page):
         self._key_button = Button(status, "Register keys", host.register_keys, kind="primary", size="sm")
         self._key_button.pack(anchor="w", pady=(px(10), 0))
         explain = (
-            "The signing key signs your files. The encryption key receives file keys from owners. Both are "
-            "registered by a transaction from your address, so nobody can swap them for their own."
+            "The signing key signs protected files; the encryption key receives file keys from owners. "
+            "Both are bound to this address by an on-chain transaction and cannot be replaced by another account."
         )
         label(keys, explain, style="small", colour=INK_2, wrap=480).grid(
             row=3, column=0, columnspan=2, sticky="w", pady=(px(10), 0)
@@ -79,7 +79,7 @@ class AccountPage(Page):
         self._balance_note = label(balance, "", style="small", colour=INK_2, wrap=420)
         self._balance_note.grid(row=1, column=0, sticky="w", pady=(px(4), 0))
         if host.is_local:
-            Button(balance, "Get 100 test ETH", host.fund_local, size="sm").grid(
+            Button(balance, "Add 100 test ETH", host.fund_local, size="sm").grid(
                 row=2, column=0, sticky="w", pady=(px(10), 0)
             )
         self.on_account_changed()
@@ -115,10 +115,10 @@ class AccountPage(Page):
         self._balance.configure(text=format_eth(info.balance_wei), foreground=AMBER if low else INK)
         if low:
             self._balance_note.configure(
-                text="Too low to pay for gas. Every registration, request and decision is a transaction."
+                text="Insufficient to pay for gas. Each registration, request and decision is a transaction."
             )
         else:
-            self._balance_note.configure(text=f"Pays the gas for transactions sent from {short_hex(info.address)}.")
+            self._balance_note.configure(text=f"Covers gas for transactions sent from {short_hex(info.address)}.")
 
     def on_busy_changed(self) -> None:
         self._key_button.set_enabled(not self.host.tx_in_flight)

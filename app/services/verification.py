@@ -61,7 +61,7 @@ def verify_and_decrypt(
     before_key = (v1, v2, v3, v4)
 
     if not force_decrypt and not all(r.passed for r in before_key):
-        reason = "Not attempted because an earlier check failed"
+        reason = "Skipped because an earlier check failed"
         rest = tuple(_skipped(check, reason) for check in (Check.UNWRAP, Check.V5_DECRYPT, Check.V6_PT_DIGEST))
         return RetrievedFile(report=VerificationReport(anchor.context.file_id, before_key + rest))
 
@@ -82,7 +82,7 @@ def _check_ct_hash(anchor: Anchor, obj: Fetched) -> CheckResult:
     if actual != anchor.ct_hash:
         return _failed(
             Check.V1_CT_HASH,
-            f"Downloaded object hashes to {_short(actual)}, the chain has {_short(anchor.ct_hash)}",
+            f"Stored object hashes to {_short(actual)}; the chain records {_short(anchor.ct_hash)}",
         )
     return _passed(Check.V1_CT_HASH, f"SHA-256 {_short(actual)} ({len(obj.data):,} bytes)")
 
@@ -96,7 +96,7 @@ def _check_manifest_hash(anchor: Anchor, manifest: Fetched) -> tuple[signing.Sig
         return None, _failed(Check.V2_MANIFEST_HASH, str(exc))
     actual = signed.manifest.digest()
     if actual != anchor.manifest_hash:
-        detail = f"Manifest hashes to {_short(actual)}, the chain has {_short(anchor.manifest_hash)}"
+        detail = f"Manifest hashes to {_short(actual)}; the chain records {_short(anchor.manifest_hash)}"
         return signed, _failed(Check.V2_MANIFEST_HASH, detail)
     return signed, _passed(Check.V2_MANIFEST_HASH, f"SHA-256 {_short(actual)}")
 
@@ -114,7 +114,7 @@ def _check_context(anchor: Anchor, signed: signing.SignedManifest | None) -> Che
     )
     wrong = [name for name, same in fields if not same]
     if wrong:
-        return _failed(Check.V3_CONTEXT, f"Manifest has a different {', '.join(wrong)} than the on-chain record")
+        return _failed(Check.V3_CONTEXT, f"Manifest fields differ from the on-chain record: {', '.join(wrong)}")
     return _passed(Check.V3_CONTEXT, f"chainId {expected.chain_id}, owner {expected.owner}")
 
 
@@ -160,11 +160,12 @@ def _check_pt_digest(signed: signing.SignedManifest | None, decrypted: aead.Decr
     if decrypted is None:
         return _skipped(Check.V6_PT_DIGEST, "Nothing was decrypted")
     if signed is None:
-        return _skipped(Check.V6_PT_DIGEST, "No readable manifest to compare with")
+        return _skipped(Check.V6_PT_DIGEST, "No readable manifest for comparison")
     if decrypted.pt_digest != signed.manifest.pt_digest:
         return _failed(
             Check.V6_PT_DIGEST,
-            f"Plaintext digest {_short(decrypted.pt_digest)} differs from the signed {_short(signed.manifest.pt_digest)}",
+            f"Plaintext digest {_short(decrypted.pt_digest)} differs from the signed digest "
+            f"{_short(signed.manifest.pt_digest)}",
         )
     return _passed(Check.V6_PT_DIGEST, f"SHA-256(P) {_short(decrypted.pt_digest)}")
 

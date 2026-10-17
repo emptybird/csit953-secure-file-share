@@ -77,8 +77,8 @@ NAVIGATION = [
 ]
 DEMO_NAVIGATION = ("demo", "Security demo", "flask")
 _DECISIONS = {
-    "AccessApproved": ("Access approved", "You can now retrieve and verify {name}."),
-    "AccessRejected": ("Request rejected", "The owner of {name} rejected your request. You can ask again."),
+    "AccessApproved": ("Access approved", "{name} is ready to retrieve and verify."),
+    "AccessRejected": ("Request rejected", "The owner of {name} rejected your request. You may request access again."),
     "AccessRevoked": ("Access revoked", "The owner of {name} revoked your access."),
 }
 
@@ -120,7 +120,7 @@ class SecureFileShareApp(tk.Tk):
         self._show_login(network, alias)
         warning = _old_tk_warning(self)
         if warning:
-            self.notify(warning, Level.WARNING, title="Old Tk version")
+            self.notify(warning, Level.WARNING, title="Unsupported Tk version")
 
     # ------------------------------------------------------------ host API
 
@@ -199,14 +199,14 @@ class SecureFileShareApp(tk.Tk):
             and not confirm(
                 self,
                 "Replace keys",
-                "Replace the keys registered for this address?",
+                "Replace the on-chain keys for this address?",
                 [
                     DialogField("Address", info.address, mono=True),
                     DialogField("New signing key", info.sig_fingerprint, mono=True),
                     DialogField("New encryption key", info.enc_fingerprint, mono=True),
                 ],
-                "Files you shared before will fail the signature check (V4), and file keys sent to "
-                "your old encryption key can only be opened with the old keystore.",
+                "Files signed with the old key will fail the signature check (V4). File keys wrapped for "
+                "the old encryption key can only be opened with the old keystore.",
                 "Replace keys",
                 danger=True,
             )
@@ -225,16 +225,17 @@ class SecureFileShareApp(tk.Tk):
         def job() -> AccountInfo:
             response = session.chain.web3.provider.make_request("anvil_setBalance", [session.address, hex(FUND_WEI)])
             if response.get("error"):
-                raise ServiceError("This node does not support anvil_setBalance; it only works on Anvil")
+                raise ServiceError("This node does not support anvil_setBalance. Test ETH is available on Anvil only.")
             return AccountService(session).info()
 
         def done(info: AccountInfo) -> None:
             self.account_changed(info)
-            self.notify(f"{format_eth(info.balance_wei)} on the local chain.", Level.SUCCESS, title="Balance topped up")
+            self.notify(f"Balance: {format_eth(info.balance_wei)}.", Level.SUCCESS, title="Test ETH added")
 
-        self.worker.submit(
-            job, done, lambda exc: self.notify(describe_error(exc), Level.ERROR, title="Top-up failed"), name="fund"
-        )
+        def failed(exc: BaseException) -> None:
+            self.notify(describe_error(exc), Level.ERROR, title="Could not add test ETH")
+
+        self.worker.submit(job, done, failed, name="fund")
 
     def run_transaction(
         self,
@@ -247,7 +248,7 @@ class SecureFileShareApp(tk.Tk):
     ) -> bool:
         if self._tx is not None:
             self.notify(
-                f"Wait until “{self._tx.action}” is confirmed.", Level.WARNING, title="One transaction at a time"
+                f"“{self._tx.action}” must be confirmed first.", Level.WARNING, title="Transaction in progress"
             )
             return False
         toast = self.toasts.show(Level.PENDING, action, "Preparing the transaction…", timeout_ms=None)
@@ -284,7 +285,7 @@ class SecureFileShareApp(tk.Tk):
 
     def logout(self) -> None:
         if self._tx is not None:
-            self.notify("Wait for the pending transaction first.", Level.WARNING, title="Cannot lock yet")
+            self.notify("A transaction is still pending.", Level.WARNING, title="Cannot lock")
             return
         if self._poll_job is not None:
             self.after_cancel(self._poll_job)
@@ -313,9 +314,9 @@ class SecureFileShareApp(tk.Tk):
         if self._tx is not pending:
             return
         elapsed = int(time.monotonic() - pending.started)
-        message = f"Sent as {short_hex(pending.tx_hash, 8, 6)}. Waiting for a block ({elapsed} s)."
+        message = f"Submitted as {short_hex(pending.tx_hash, 8, 6)}. Awaiting confirmation ({elapsed} s)."
         if elapsed >= SLOW_TX_SECONDS:
-            message += " This is slower than usual; it may still be mined."
+            message += " Confirmation is taking longer than usual."
         pending.toast.update_toast(message=message, action=self.tx_action(pending.tx_hash))
         self.after(1000, lambda: self._tick(pending))
 
@@ -394,7 +395,7 @@ class SecureFileShareApp(tk.Tk):
             return
         if self._poll_failing:
             self._poll_failing = False
-            self.notify("Back in sync with the chain.", Level.SUCCESS, title="Connection restored")
+            self.notify("Chain data is up to date.", Level.SUCCESS, title="Connection restored")
         events = session.events.events
         if self._seen_events is None:  # first poll: history, nothing to announce
             self._seen_events = len(events)
@@ -413,7 +414,7 @@ class SecureFileShareApp(tk.Tk):
             return
         if not self._poll_failing:
             self._poll_failing = True
-            self.notify(describe_error(exc), Level.WARNING, title="Lost connection to the chain")
+            self.notify(describe_error(exc), Level.WARNING, title="Connection to the chain lost")
         self._schedule_poll()
 
     def _announce(self, session: Session, events: Sequence[ChainEvent]) -> None:
@@ -426,7 +427,7 @@ class SecureFileShareApp(tk.Tk):
             file_id = event.file_id
             if event.name == "AccessRequested" and registration and registration.args["owner"] == me:
                 self.notify(
-                    f"{short_hex(event.account or '')} asked for {name}.",
+                    f"{short_hex(event.account or '')} requested access to {name}.",
                     title="New access request",
                     action=("Review request", lambda f=file_id: self.navigate("files", file_id=f)),
                 )
@@ -453,8 +454,8 @@ class SecureFileShareApp(tk.Tk):
     def _close(self) -> None:
         if self._tx is not None and not messagebox.askokcancel(
             "Transaction pending",
-            f"“{self._tx.action}” has not been confirmed yet. If you quit now it may still be mined, "
-            "but this window will not show the result. Quit anyway?",
+            f"“{self._tx.action}” is not yet confirmed. It may still be mined after you quit, "
+            "but its result will not be shown. Quit anyway?",
             parent=self,
         ):
             return
@@ -526,19 +527,19 @@ class _Shell(tk.Frame):
         self.sidebar.show_account(info)
         app = self._app
         if is_low_balance(info.balance_wei):
-            actions = [("Get 100 test ETH", app.fund_local)] if app.is_local else []
-            hint = "" if app.is_local else " Top it up from a faucet or another account."
-            self.banner.show(f"Your balance is too low to pay for gas.{hint}", actions=actions)
+            actions = [("Add 100 test ETH", app.fund_local)] if app.is_local else []
+            hint = "" if app.is_local else " Fund it from a faucet or another account."
+            self.banner.show(f"The balance is too low to pay for gas.{hint}", actions=actions)
             self.banner.grid(row=0, column=0, sticky="ew")
         elif info.key_status is KeyStatus.NOT_REGISTERED:
             self.banner.show(
-                "Register your public keys before you protect or request files.",
+                "Register your public keys to protect or request files.",
                 actions=[("Register keys", app.register_keys)],
             )
             self.banner.grid(row=0, column=0, sticky="ew")
         elif info.key_status is KeyStatus.MISMATCH:
             self.banner.show(
-                "The keys registered on-chain for this address are not the ones in this keystore.",
+                "The on-chain keys for this address differ from this keystore.",
                 tone="red",
                 actions=[("Open account", lambda: self.show("account"))],
             )
@@ -558,7 +559,7 @@ def _old_tk_warning(root: tk.Tk) -> str | None:
     version = tuple(int(part) for part in re.findall(r"\d+", patchlevel)[:3])
     if version >= MIN_MAC_TK:
         return None
-    return f"Tk {patchlevel} may ignore clicks on this macOS. Run the app from the 953-a2 conda environment."
+    return f"Tk {patchlevel} may not respond to clicks on this macOS. Run the app from the 953-a2 conda environment."
 
 
 def enable_dpi_awareness() -> None:

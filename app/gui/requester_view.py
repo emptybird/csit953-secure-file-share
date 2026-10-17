@@ -28,12 +28,12 @@ from app.services.requester import RequesterService
 DETAIL_WRAP = 330
 _REQUESTABLE = (RequestStatus.NONE, RequestStatus.REJECTED, RequestStatus.REVOKED)
 _EXPLAIN = {
-    RequestStatus.NONE: "You have not asked for this file. The owner sees your request in their list.",
-    RequestStatus.PENDING: "Waiting for the owner. This page updates when they decide.",
-    RequestStatus.APPROVED: "The owner encrypted the file key to your encryption key. You can retrieve, "
-    "verify and decrypt the file.",
-    RequestStatus.REJECTED: "The owner rejected your request. You can ask again.",
-    RequestStatus.REVOKED: "The owner revoked your access and the wrapped key was deleted. You can ask again.",
+    RequestStatus.NONE: "Not requested. The owner reviews each request before sharing the file key.",
+    RequestStatus.PENDING: "Awaiting the owner's decision. This page updates automatically.",
+    RequestStatus.APPROVED: "The file key is encrypted to your encryption key. The file is ready to "
+    "retrieve, verify and decrypt.",
+    RequestStatus.REJECTED: "The owner rejected your request. You may request access again.",
+    RequestStatus.REVOKED: "The owner revoked your access and deleted the wrapped key. You may request access again.",
 }
 
 
@@ -45,7 +45,7 @@ class BrowsePage(Page):
             parent,
             host,
             "Browse files",
-            "Every file registered on this contract. Request one, then retrieve and verify it.",
+            "All files registered on this contract. Request access, then retrieve and verify a file.",
         )
         self._requester = RequesterService(host.session)
         self._files: dict[str, FileSummary] = {}
@@ -72,7 +72,7 @@ class BrowsePage(Page):
             build=_build_row,
             fill=_fill_row,
             on_select=lambda _key: self._show_detail(),
-            empty=("search", "No files yet", "When someone protects a file, it appears here."),
+            empty=("search", "No files", "Files appear here once registered on the contract."),
         )
         self._list.pack(fill="both", expand=True)
         self._show_detail()
@@ -128,11 +128,11 @@ class BrowsePage(Page):
                 continue
             shown.append((key, summary))
         if self._query:
-            self._list.empty.set("No matching files", "Try part of the label, the file ID or the owner's address.")
+            self._list.empty.set("No matching files", "Search by label, file ID or owner address.")
         elif mine_only:
-            self._list.empty.set("No requests yet", "Choose a file under All files and request access.")
+            self._list.empty.set("No requests", "Select a file under All files to request access.")
         else:
-            self._list.empty.set("No files yet", "When someone protects a file, it appears here.")
+            self._list.empty.set("No files", "Files appear here once registered on the contract.")
         self._list.set_items(shown)
         self._count.configure(text=f"{len(shown)} shown" if self._files else "")
         if self._wanted is not None and self._wanted in self._files:
@@ -156,7 +156,7 @@ class BrowsePage(Page):
         clear(body)
         summary = self._selected()
         if summary is None:
-            text = "Select a file to see your access to it." if self._files else ""
+            text = "Select a file to view your access." if self._files else ""
             label(body, text, style="small", colour=INK_3, wrap=DETAIL_WRAP).pack(anchor="w", padx=px(24), pady=px(28))
             return
         pane = tk.Frame(body, background=SURFACE)
@@ -206,7 +206,7 @@ class BrowsePage(Page):
             button = Button(pane, "Deactivated by the owner", None, fill=True)
             button.set_enabled(False)
         elif summary.my_status is RequestStatus.PENDING:
-            button = Button(pane, "Waiting for the owner", None, fill=True)
+            button = Button(pane, "Awaiting approval", None, fill=True)
             button.set_enabled(False)
         else:
             text = "Request access" if summary.my_status is RequestStatus.NONE else "Request again"
@@ -228,9 +228,9 @@ class BrowsePage(Page):
 
 def _explain(summary: FileSummary) -> str:
     if summary.is_mine:
-        return "You registered this file. Retrieve and verify opens it with your own copy of the key."
+        return "You own this file. Retrieve and verify uses your copy of the file key."
     if not summary.active and summary.my_status is not RequestStatus.APPROVED:
-        return "The owner deactivated this file, so it no longer accepts requests."
+        return "The owner deactivated this file. New requests are not accepted."
     return _EXPLAIN[summary.my_status]
 
 

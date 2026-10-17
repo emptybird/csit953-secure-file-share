@@ -287,7 +287,7 @@ class ListView(ScrollArea, Generic[T]):
         on_select: Callable[[str | None], None] | None = None,
         on_activate: Callable[[str], None] | None = None,
         selectable: bool = True,
-        empty: tuple[str, str, str] = ("files", "Nothing here yet", ""),
+        empty: tuple[str, str, str] = ("files", "Nothing to show", ""),
     ) -> None:
         super().__init__(parent, background=SURFACE)
         self._build, self._fill = build, fill

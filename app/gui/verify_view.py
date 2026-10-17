@@ -36,20 +36,20 @@ SIDE_WIDTH = 344
 STEPS_WRAP = 430
 REVEAL_MS = 140
 _STAGES = (
-    ("grant", "Read your authorization", "The contract must hold an approved request with a wrapped key for you."),
+    ("grant", "Read the authorization", "The contract must hold an approved request with a wrapped file key."),
     (
         "integrity",
         "Check integrity and signature",
         (
-            "What storage returns is compared with the on-chain record, and the owner's signature is checked "
-            "with the key the owner registered."
+            "Stored data is compared with the on-chain record, and the owner's signature is checked "
+            "against the owner's registered key."
         ),
     ),
-    ("key", "Recover the file key", "Your encryption key opens the wrapped key (ECIES). Nobody else's can."),
+    ("key", "Recover the file key", "Your encryption key unwraps the file key (ECIES). No other key can."),
     (
         "decrypt",
         "Decrypt and compare",
-        "AES-256-GCM checks its tag, then the content is compared with the digest the owner signed.",
+        "AES-256-GCM verifies its tag, then the content is compared with the signed digest.",
     ),
 )
 _STAGE_CHECKS = {
@@ -63,7 +63,7 @@ _SHORT_TITLES = {
     Check.V2_MANIFEST_HASH: "Manifest hash matches the chain",
     Check.V3_CONTEXT: "Manifest belongs to this file, owner and chain",
     Check.V4_SIGNATURE: "Owner's signature is valid",
-    Check.UNWRAP: "Wrapped key opened with your key",
+    Check.UNWRAP: "File key unwrapped with your key",
     Check.V5_DECRYPT: "AES-256-GCM tag verified",
     Check.V6_PT_DIGEST: "Content matches the signed digest",
 }
@@ -75,7 +75,7 @@ class VerifyPage(Page):
     key = "verify"
 
     def __init__(self, parent: tk.Misc, host: Host) -> None:
-        super().__init__(parent, host, "Retrieve and verify", "Choose a file under Browse files first.")
+        super().__init__(parent, host, "Retrieve and verify", "Select a file under Browse files.")
         self._requester = RequesterService(host.session)
         self._summary: FileSummary | None = None
         self._retrieved: RetrievedFile | None = None
@@ -100,7 +100,7 @@ class VerifyPage(Page):
         self._chain.pack(anchor="w", fill="x")
         self._force: Checkbox | None = None
         if host.demo:
-            self._force = Checkbox(left, "Demo: decrypt even if a check fails, to show the GCM tag check")
+            self._force = Checkbox(left, "Demo: decrypt even if a check fails (shows the GCM tag check)")
             self._force.pack(anchor="w", pady=(px(24), 0))
         self._key_panel = Panel(self._side, padding=20)
         self._key_panel.pack(fill="x")
@@ -149,7 +149,7 @@ class VerifyPage(Page):
         self._retrieved = None
         self._again.set_enabled(False)
         self._chain.reset()
-        self._chain.set("grant", StepState.RUNNING, "Reading the file record and your request from the contract…")
+        self._chain.set("grant", StepState.RUNNING, "Reading the file record and request from the contract…")
         self._show_grant(None)
         self._show_result(working=True)
         force = self._force is not None and self._force.get()
@@ -186,14 +186,15 @@ class VerifyPage(Page):
             self._running = False
             self._chain.set("grant", StepState.FAILED, _denied_text(self._summary, denied))
             for stage in ("integrity", "key", "decrypt"):
-                self._chain.set(stage, StepState.SKIPPED, "Not attempted without an authorization.")
+                self._chain.set(stage, StepState.SKIPPED, "Skipped: no authorization.")
             self._show_result(denied=True)
             self._again.set_enabled(True)
             return
         if grant.is_owner_copy:
-            detail = f"You own this file. Your own wrapped copy of the key ({grant.size} bytes) is in the file record."
+            detail = f"Owner copy of the wrapped file key ({grant.size} bytes) read from the file record."
         else:
-            detail = f"Approved {format_time(grant.updated_at)}. A {grant.size}-byte wrapped key is stored for you."
+            stamp = format_time(grant.updated_at)
+            detail = f"Approved {stamp}. A {grant.size}-byte wrapped file key is stored for you."
         self._chain.set("grant", StepState.DONE, detail)
         self._show_grant(grant)
         results = {r.check: r for r in retrieved.report.results}
@@ -216,7 +217,7 @@ class VerifyPage(Page):
             if Outcome.FAILED in states:
                 self._chain.set(stage, StepState.FAILED, _stage_summary(stage, states))
             elif all(s is Outcome.SKIPPED for s in states):
-                self._chain.set(stage, StepState.SKIPPED, "Not attempted because a check above failed.")
+                self._chain.set(stage, StepState.SKIPPED, "Skipped because an earlier check failed.")
             else:
                 self._chain.set(stage, StepState.DONE, "")
             if index + 1 < len(steps):
@@ -241,7 +242,7 @@ class VerifyPage(Page):
         heading.pack(fill="x")
         label(heading, "Authorized key", style="strong").pack(side="left")
         if grant is None:
-            text = "The wrapped file key the contract holds for you appears here."
+            text = "The wrapped file key held by the contract for this account appears here."
             label(body, text, style="small", colour=INK_3, wrap=SIDE_WIDTH - 40).pack(anchor="w", pady=(px(8), 0))
             return
         Badge(heading, "Owner copy" if grant.is_owner_copy else "Approved", "success").pack(side="right")
@@ -249,9 +250,9 @@ class VerifyPage(Page):
         fields.pack(fill="x", pady=(px(12), 0))
         field_row(fields, 0, "For").configure(text=f"You, {short_hex(grant.recipient)}")
         field_row(fields, 1, "Wrapped key").configure(text=f"{grant.size} bytes, stored on-chain")
-        field_row(fields, 2, "One-time key", mono=True).configure(text=grant.ephemeral_fingerprint)
+        field_row(fields, 2, "Ephemeral key", mono=True).configure(text=grant.ephemeral_fingerprint)
         field_row(fields, 3, "Scheme", wrap=190).configure(text="ECIES on secp256k1 with HKDF-SHA256 and AES-256-GCM")
-        note = "Bound to this file and your address, so it cannot be reused for another file or person."
+        note = "Bound to this file and your address; it cannot be reused for another file or recipient."
         label(body, note, style="small", colour=INK_2, wrap=SIDE_WIDTH - 40).pack(anchor="w", pady=(px(10), 0))
 
     def _show_result(
@@ -275,7 +276,7 @@ class VerifyPage(Page):
                 if self._summary and self._summary.is_mine
                 else short_hex(self._summary.owner if self._summary else "")
             )
-            text = f"The file is exactly what {owner} signed, and nobody changed it in storage."
+            text = f"The content matches what {owner} signed and was not modified in storage."
             label(body, text, style="small", colour=INK_2, wrap=wrap).pack(anchor="w", pady=(px(4), px(14)))
             fields = tk.Frame(body, background=SURFACE)
             fields.pack(fill="x")
@@ -298,21 +299,21 @@ class VerifyPage(Page):
             _seal(body, RED, "cross")
             label(body, "Verification failed", style="heading", colour=RED).pack(anchor="w", pady=(px(12), 0))
             text = (
-                f"{plural(len(failed), 'check')} failed, so the file was not decrypted to disk. What storage "
-                "returned does not match what the owner registered and signed."
+                f"{plural(len(failed), 'check')} failed. Nothing was written to disk: the stored data does "
+                "not match what the owner registered and signed."
             )
             label(body, text, style="small", colour=INK_2, wrap=wrap).pack(anchor="w", pady=(px(4), 0))
         elif denied:
-            label(body, "No access yet", style="heading").pack(anchor="w")
-            text = "Request access under Browse files. The owner has to approve before a key exists for you."
+            label(body, "No access", style="heading").pack(anchor="w")
+            text = "Request access under Browse files. A file key is issued only after the owner approves."
             label(body, text, style="small", colour=INK_2, wrap=wrap).pack(anchor="w", pady=(px(4), px(14)))
             Button(body, "Back to files", lambda: self.host.navigate("browse"), size="sm").pack(anchor="w")
         elif error:
-            label(body, "Could not finish", style="heading", colour=RED).pack(anchor="w")
+            label(body, "Verification incomplete", style="heading", colour=RED).pack(anchor="w")
             label(body, error, style="small", colour=INK_2, wrap=wrap).pack(anchor="w", pady=(px(4), 0))
         else:
             label(body, "Result", style="strong").pack(anchor="w")
-            text = "Checking…" if working else "Save becomes available when every check has passed."
+            text = "Checking…" if working else "Saving is available once every check passes."
             label(body, text, style="small", colour=INK_3, wrap=wrap).pack(anchor="w", pady=(px(8), 0))
 
     # ------------------------------------------------------------------ save
@@ -323,7 +324,9 @@ class VerifyPage(Page):
             return
         downloads = Path.home() / "Downloads"
         directory = filedialog.askdirectory(
-            parent=self, title="Save the decrypted file to", initialdir=downloads if downloads.is_dir() else Path.home()
+            parent=self,
+            title="Choose a folder for the decrypted file",
+            initialdir=downloads if downloads.is_dir() else Path.home(),
         )
         if not directory:
             return
@@ -349,19 +352,19 @@ def _sub_check(result: CheckResult) -> SubCheck:
 def _denied_text(summary: FileSummary | None, denied: BaseException | None) -> str:
     status = summary.my_status if summary is not None else None
     return {
-        RequestStatus.NONE: "You have not requested this file, so the contract holds no key for you.",
-        RequestStatus.PENDING: "Your request is still pending. The owner has not shared the key yet.",
-        RequestStatus.REJECTED: "The owner rejected your request, so no key was shared.",
-        RequestStatus.REVOKED: "The owner revoked your access and the wrapped key was deleted.",
-    }.get(status, str(denied) if denied else "No key is stored for you.")
+        RequestStatus.NONE: "No request exists for this file, so the contract holds no file key for you.",
+        RequestStatus.PENDING: "The request is pending. The owner has not shared the file key.",
+        RequestStatus.REJECTED: "The owner rejected the request. No file key was shared.",
+        RequestStatus.REVOKED: "The owner revoked access and deleted the wrapped file key.",
+    }.get(status, str(denied) if denied else "No file key is stored for you.")
 
 
 def _stage_summary(stage: str, outcomes: list[Outcome]) -> str:
     failed = outcomes.count(Outcome.FAILED)
     if stage == "integrity":
-        return f"{plural(failed, 'check')} failed. Storage returned something the owner did not register."
+        return f"{plural(failed, 'check')} failed. The stored data does not match the on-chain record."
     if stage == "key":
-        return "The wrapped key does not open with your key."
+        return "The wrapped file key cannot be opened with your key."
     return "The content does not match what the owner encrypted and signed."
 
 

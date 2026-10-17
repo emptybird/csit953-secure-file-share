@@ -55,7 +55,7 @@ class LoginView(tk.Frame):
         icons.logo(mark, px(24), px(24), px(48), ACCENT, ON_ACCENT)
         mark.grid(row=1, column=0, pady=(px(16), px(14)))
         label(self, "Secure File Share", style="display").grid(row=2, column=0)
-        tagline = "Encrypt and sign files on your computer. A smart contract decides who receives the key."
+        tagline = "Files are encrypted and signed on this computer. A smart contract controls who receives the key."
         intro = label(self, tagline, style="body", colour=INK_2, wrap=420)
         intro.configure(justify="center")
         intro.grid(row=3, column=0, pady=(px(6), px(22)))
@@ -76,7 +76,7 @@ class LoginView(tk.Frame):
         self._error.grid(row=4, column=0, sticky="w", pady=(px(12), 0))
         self._error.grid_remove()
 
-        note = "Keys are decrypted on this computer. Only ciphertext and signed transactions leave it."
+        note = "Keys are decrypted locally. Only ciphertext and signed transactions leave this computer."
         footer = label(self, note, style="small", colour=INK_3, wrap=420)
         footer.configure(justify="center")
         footer.grid(row=6, column=0, pady=(0, px(24)))
@@ -105,7 +105,7 @@ class LoginView(tk.Frame):
         page = tk.Frame(form, background=form.cget("background"))
         page.columnconfigure(0, weight=1)
         self._caption(0, "Name", page)
-        self._new_alias = Field(page, placeholder="For example alice", width=FORM_WIDTH)
+        self._new_alias = Field(page, placeholder="For example: alice", width=FORM_WIDTH)
         self._new_alias.grid(row=1, column=0, sticky="ew")
         self._caption(2, "Password", page)
         self._new_password = Field(page, secret=True, width=FORM_WIDTH)
@@ -114,8 +114,8 @@ class LoginView(tk.Frame):
         self._new_confirm = Field(page, secret=True, width=FORM_WIDTH, on_return=self._create_keystore)
         self._new_confirm.grid(row=5, column=0, sticky="ew")
         text = (
-            "Three new keys (for transactions, file signatures and file keys) are saved in "
-            f"keystore/<name>.json, encrypted with this password of at least {MIN_PASSWORD_CHARS} characters. "
+            "Generates three keys (transactions, file signing, file encryption) and saves them to "
+            f"keystore/<name>.json, encrypted with this password (at least {MIN_PASSWORD_CHARS} characters). "
             "A lost password cannot be recovered."
         )
         label(page, text, style="small", colour=INK_2, wrap=FORM_WIDTH).grid(
@@ -148,7 +148,7 @@ class LoginView(tk.Frame):
         name = self._network.get()
         if not name:
             text = (
-                "No network settings yet. Copy .env.example to .env.local, start the chain and run scripts/deploy.py."
+                "No network is configured. Copy .env.example to .env.local, start the chain and run scripts/deploy.py."
             )
             self._network_note.configure(text=text, foreground=RED)
             return
@@ -170,10 +170,10 @@ class LoginView(tk.Frame):
     def _unlock(self) -> None:
         network, alias, password = self._network.get(), self._alias.get(), self._password.get()
         if not network or not alias:
-            self._fail("Choose a network and a keystore first.")
+            self._fail("Select a network and a keystore.")
             return
         if not password:
-            self._fail("Enter the password of this keystore.")
+            self._fail("Enter the keystore password.")
             self._password.focus()
             return
         path = self._keystore_dir / f"{alias}.json"
@@ -201,16 +201,16 @@ class LoginView(tk.Frame):
             self._fail(str(exc))
             return
         problem = (
-            f"A keystore called {alias} already exists." if path.exists()
-            else f"Use at least {MIN_PASSWORD_CHARS} characters for the password." if len(password) < MIN_PASSWORD_CHARS
-            else "The two passwords are different." if password != again
-            else "Set up a network first (see above)." if not network
+            f"A keystore named {alias} already exists." if path.exists()
+            else f"The password must be at least {MIN_PASSWORD_CHARS} characters." if len(password) < MIN_PASSWORD_CHARS
+            else "The passwords do not match." if password != again
+            else "Configure a network first." if not network
             else ""
         )  # fmt: skip
         if problem:
             self._fail(problem)
             return
-        self._start(self._create_button, "Creating keys…")
+        self._start(self._create_button, "Generating keys…")
 
         def job() -> tuple[AppConfig, Session]:
             config = load_config(network)

@@ -85,7 +85,7 @@ def test_restore_keeps_the_first_original(alice: Session, protected: ProtectedFi
 def test_unauthorized_approve_is_rejected_before_and_after_broadcast(
     mallory: Session, bob: Session, make_protected: Callable[..., ProtectedFile]
 ) -> None:
-    """What the Demo tab's "Try approveAccess" does, with and without gas estimation."""
+    """What the Demo tab's "Call approveAccess" does, with and without gas estimation."""
     protected = make_protected()
     RequesterService(bob).request_access(protected.file_id)
     wrapped_key = bytes(WRAPPED_KEY_LEN)
