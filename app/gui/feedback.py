@@ -29,11 +29,13 @@ from app.gui.theme import (
     INK_3,
     LINE,
     LINE_STRONG,
+    ON_ACCENT,
     RED,
     RED_SOFT,
     SLATE_SOFT,
+    SUCCESS,
+    SUCCESS_SOFT,
     SURFACE,
-    WHITE,
     font,
     line_height,
     px,
@@ -147,17 +149,17 @@ class _Step(tk.Frame):
         x, r, y = (node + px(4)) / 2, node / 2, node / 2
         line = max(2, px(2))
         if self.index > 0:
-            rail.create_line(x, 0, x, y - r, fill=ACCENT if self.previous_done else LINE, width=line)
+            rail.create_line(x, 0, x, y - r, fill=SUCCESS if self.previous_done else LINE, width=line)
         if not self.last:
-            rail.create_line(x, y + r, x, height, fill=ACCENT if self.state is StepState.DONE else LINE, width=line)
+            rail.create_line(x, y + r, x, height, fill=SUCCESS if self.state is StepState.DONE else LINE, width=line)
         box = (x - r + 1, y - r + 1, x + r - 1, y + r - 1)
         stroke = max(1.6, px(2))
         if self.state is StepState.DONE:
-            rail.create_oval(*box, fill=ACCENT, outline=ACCENT)
-            icons.draw(rail, "check", x, y, node * 0.62, WHITE, stroke)
+            rail.create_oval(*box, fill=SUCCESS, outline=SUCCESS)
+            icons.draw(rail, "check", x, y, node * 0.62, ON_ACCENT, stroke)
         elif self.state is StepState.FAILED:
             rail.create_oval(*box, fill=RED, outline=RED)
-            icons.draw(rail, "cross", x, y, node * 0.62, WHITE, stroke)
+            icons.draw(rail, "cross", x, y, node * 0.62, ON_ACCENT, stroke)
         elif self.state is StepState.SKIPPED:
             rail.create_oval(*box, fill=SLATE_SOFT, outline=SLATE_SOFT)
             icons.draw(rail, "dash", x, y, node * 0.6, INK_3, stroke)
@@ -212,7 +214,7 @@ def _draw_mark(canvas: tk.Canvas, state: StepState) -> None:
     size = int(canvas.cget("width"))
     centre, stroke = size / 2, max(1.6, px(1.8))
     if state is StepState.DONE:
-        icons.draw(canvas, "check", centre, centre, size, ACCENT, stroke)
+        icons.draw(canvas, "check", centre, centre, size, SUCCESS, stroke)
     elif state is StepState.FAILED:
         icons.draw(canvas, "cross", centre, centre, size, RED, stroke)
     elif state is StepState.SKIPPED:
@@ -276,7 +278,7 @@ class StepChain(tk.Frame):
 _LEVEL_STYLE = {
     Level.INFO: ("info", ACCENT, ACCENT_SOFT),
     Level.PENDING: ("", ACCENT, ACCENT_SOFT),
-    Level.SUCCESS: ("check", ACCENT, ACCENT_SOFT),
+    Level.SUCCESS: ("check", SUCCESS, SUCCESS_SOFT),
     Level.WARNING: ("warning", AMBER, AMBER_SOFT),
     Level.ERROR: ("cross", RED, RED_SOFT),
 }

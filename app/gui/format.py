@@ -25,7 +25,7 @@ _UNITS = ("bytes", "KB", "MB", "GB")
 _STATUS_BADGE = {
     RequestStatus.NONE: ("Not requested", "slate"),
     RequestStatus.PENDING: ("Pending", "amber"),
-    RequestStatus.APPROVED: ("Approved", "accent"),
+    RequestStatus.APPROVED: ("Approved", "success"),
     RequestStatus.REJECTED: ("Rejected", "red"),
     RequestStatus.REVOKED: ("Revoked", "slate"),
 }
@@ -35,7 +35,7 @@ _EVENTS = {
     "KeysRegistered": ("Keys registered", "slate"),
     "FileRegistered": ("File registered", "accent"),
     "AccessRequested": ("Access requested", "amber"),
-    "AccessApproved": ("Access approved", "accent"),
+    "AccessApproved": ("Access approved", "success"),
     "AccessRejected": ("Access rejected", "red"),
     "AccessRevoked": ("Access revoked", "slate"),
     "FileDeactivated": ("File deactivated", "slate"),

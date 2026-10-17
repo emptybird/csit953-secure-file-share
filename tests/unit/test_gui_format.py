@@ -31,7 +31,7 @@ from app.services import ServiceError
 from app.storage import ObjectNotFoundError
 
 FILE_ID = bytes.fromhex("7c" * 31 + "41")
-TONES = {"accent", "amber", "red", "slate"}
+TONES = {"accent", "success", "amber", "red", "slate"}
 
 
 def test_short_hex_of_bytes_address_and_short_values() -> None:
@@ -88,7 +88,7 @@ def test_format_size(size: int, text: str) -> None:
 def test_every_status_has_a_badge() -> None:
     badges = {status: status_badge(status) for status in RequestStatus}
     assert badges[RequestStatus.PENDING] == ("Pending", "amber")
-    assert badges[RequestStatus.APPROVED] == ("Approved", "accent")
+    assert badges[RequestStatus.APPROVED] == ("Approved", "success")
     assert badges[RequestStatus.REJECTED] == ("Rejected", "red")
     assert {tone for _, tone in badges.values()} <= TONES
 

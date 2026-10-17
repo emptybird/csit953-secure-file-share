@@ -1,9 +1,10 @@
 """Design tokens: colours, type scale and sizes (DESIGN.md 8, 8.1).
 
 The GUI uses plain Tk widgets and draws its own controls on canvases, so it
-looks the same on macOS, Windows and Linux and needs no ttk theme. One accent,
-"ledger green", marks what is trusted or actionable; amber, red and slate are
-kept for request and check states.
+looks the same on macOS, Windows and Linux and needs no ttk theme. The palette
+is "graphite": neutral greys and a near-black accent for actions and selection.
+Colour is reserved for state: green for passed checks and approvals, amber for
+pending requests, red for failures and destructive actions.
 
 Sizes are written in logical pixels. `px` scales them on high-DPI Windows and
 Linux screens; fonts are created from the platform UI font at the same scale.
@@ -17,38 +18,42 @@ from tkinter import font as tkfont
 
 # --------------------------------------------------------------- colours
 
-PAPER = "#F4F6F5"  # window, sidebar
+PAPER = "#F4F4F5"  # window, sidebar
 SURFACE = "#FFFFFF"  # content area, inputs
-SUNKEN = "#EAEEEC"  # segmented-control track
-HOVER = "#F2F5F3"  # list row under the pointer
-SELECTED = "#E6F2EC"  # selected list row
-SIDEBAR_HOVER = "#E8ECEA"
-LINE = "#E1E6E3"  # hairlines
-LINE_STRONG = "#C8D1CC"  # input borders
+SUNKEN = "#EAEAEC"  # segmented-control track
+HOVER = "#F7F7F8"  # list row under the pointer
+SELECTED = "#F0F0F2"  # selected list row
+SIDEBAR_HOVER = "#E9E9EC"
+LINE = "#E4E4E7"  # hairlines
+LINE_STRONG = "#CDCDD3"  # input borders
 
-INK = "#17201C"
-INK_2 = "#5A6661"
-INK_3 = "#8E9994"
+INK = "#18181B"
+INK_2 = "#52525B"
+INK_3 = "#6E6E78"  # 5:1 on white, so captions meet WCAG AA
 
-ACCENT = "#0F6E56"
-ACCENT_HOVER = "#0B5C48"
-ACCENT_PRESSED = "#084A3A"
-ACCENT_SOFT = "#E2F1EA"
-ACCENT_SOFT_PRESSED = "#CFE7DC"
-ACCENT_RING = "#9CD0BC"
+ACCENT = "#18181B"  # primary buttons, links, selection, focus
+ACCENT_HOVER = "#2E2E33"
+ACCENT_PRESSED = "#000000"
+ACCENT_SOFT = "#EDEDF0"
+ACCENT_SOFT_PRESSED = "#E1E1E6"
+ACCENT_RING = "#A9A9B2"
+ON_ACCENT = "#FFFFFF"  # text and icons on accent, success and red fills
 
-AMBER = "#955600"
-AMBER_SOFT = "#FCEFD8"
-RED = "#B3261E"
-RED_HOVER = "#951F18"
-RED_PRESSED = "#7A1913"
-RED_SOFT = "#FBE9E7"
-RED_SOFT_PRESSED = "#F5D3CF"
-SLATE_SOFT = "#ECF0EE"
+SUCCESS = "#15803D"  # passed checks, approvals, "Verified"
+SUCCESS_SOFT = "#E3F5E8"
+SUCCESS_TEXT = "#166534"
 
-DISABLED_BG = "#E6EBE8"
-DISABLED_FG = "#9BA6A0"
-WHITE = "#FFFFFF"
+AMBER = "#AA5008"
+AMBER_SOFT = "#FDF1DC"
+RED = "#B91C1C"
+RED_HOVER = "#991B1B"
+RED_PRESSED = "#7F1D1D"
+RED_SOFT = "#FDECEC"
+RED_SOFT_PRESSED = "#F9D2D2"
+SLATE_SOFT = "#EFEFF1"
+
+DISABLED_BG = "#EDEDEF"
+DISABLED_FG = "#A1A1AA"
 
 # ---------------------------------------------------------------- sizes
 

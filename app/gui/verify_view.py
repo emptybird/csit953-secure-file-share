@@ -25,7 +25,7 @@ from app.gui.format import format_size, format_time, label_text, plural, short_h
 from app.gui.host import Host, Level
 from app.gui.layout import Panel, ScrollArea, field_row
 from app.gui.page import Page, clear
-from app.gui.theme import ACCENT, INK_2, INK_3, PAGE_PAD, RED, SURFACE, WHITE, px
+from app.gui.theme import INK_2, INK_3, ON_ACCENT, PAGE_PAD, RED, SUCCESS, SURFACE, px
 from app.gui.widgets import Badge, Button, Checkbox, Link, hline, label
 from app.gui.worker import describe_error
 from app.services import AccessDeniedError
@@ -244,7 +244,7 @@ class VerifyPage(Page):
             text = "The wrapped file key the contract holds for you appears here."
             label(body, text, style="small", colour=INK_3, wrap=SIDE_WIDTH - 40).pack(anchor="w", pady=(px(8), 0))
             return
-        Badge(heading, "Owner copy" if grant.is_owner_copy else "Approved", "accent").pack(side="right")
+        Badge(heading, "Owner copy" if grant.is_owner_copy else "Approved", "success").pack(side="right")
         fields = tk.Frame(body, background=SURFACE)
         fields.pack(fill="x", pady=(px(12), 0))
         field_row(fields, 0, "For").configure(text=f"You, {short_hex(grant.recipient)}")
@@ -268,8 +268,8 @@ class VerifyPage(Page):
         wrap = SIDE_WIDTH - 40
         if retrieved is not None and retrieved.ok and retrieved.plaintext is not None:
             header = retrieved.plaintext.header
-            _seal(body, ACCENT, "check")
-            label(body, "Verified", style="display", colour=ACCENT).pack(anchor="w", pady=(px(12), 0))
+            _seal(body, SUCCESS, "check")
+            label(body, "Verified", style="display", colour=SUCCESS).pack(anchor="w", pady=(px(12), 0))
             owner = (
                 "you"
                 if self._summary and self._summary.is_mine
@@ -369,7 +369,7 @@ def _seal(parent: tk.Misc, colour: str, icon: str) -> None:
     size = px(48)
     canvas = tk.Canvas(parent, width=size, height=size, background=SURFACE, highlightthickness=0)
     canvas.create_oval(1, 1, size - 1, size - 1, fill=colour, outline=colour)
-    icons.draw(canvas, icon, size / 2, size / 2, size * 0.5, WHITE, max(2.4, px(3)))
+    icons.draw(canvas, icon, size / 2, size / 2, size * 0.5, ON_ACCENT, max(2.4, px(3)))
     canvas.pack(anchor="w")
 
 

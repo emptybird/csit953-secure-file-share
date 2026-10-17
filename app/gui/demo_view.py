@@ -31,7 +31,7 @@ from app.gui.format import label_text, short_hex
 from app.gui.host import Host
 from app.gui.layout import ScrollArea
 from app.gui.page import Page
-from app.gui.theme import ACCENT, INK_2, INK_3, PAGE_PAD, RED, SURFACE, px
+from app.gui.theme import INK_2, INK_3, PAGE_PAD, RED, SUCCESS, SURFACE, px
 from app.gui.widgets import Button, Checkbox, Field, Link, Select, hline, label, vline
 from app.gui.worker import describe_error
 from app.services import ServiceError
@@ -224,10 +224,10 @@ class DemoPage(Page):
         if isinstance(exc, TransactionFailedError):
             reason = f" {exc.revert}." if exc.revert else ""
             text = f"Blocked: the transaction was mined and reverted (status Fail).{reason} Tx {short_hex(exc.tx_hash, 8, 6)}."
-            self._attack_result.configure(text=text, foreground=ACCENT)
+            self._attack_result.configure(text=text, foreground=SUCCESS)
         elif isinstance(exc, ContractRevertError):
             text = f"Blocked before sending: {exc.error_name}. {exc}."
-            self._attack_result.configure(text=text, foreground=ACCENT)
+            self._attack_result.configure(text=text, foreground=SUCCESS)
         else:
             self._attack_result.configure(text=describe_error(exc), foreground=RED)
 

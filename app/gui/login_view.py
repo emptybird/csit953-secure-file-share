@@ -26,7 +26,7 @@ from app.gui import icons
 from app.gui.format import short_hex
 from app.gui.host import LoginHost
 from app.gui.layout import Panel
-from app.gui.theme import ACCENT, INK_2, INK_3, PAPER, RED, WHITE, px
+from app.gui.theme import ACCENT, INK_2, INK_3, ON_ACCENT, PAPER, RED, px
 from app.gui.widgets import Button, Field, Link, Select, label
 from app.gui.worker import describe_error
 from app.services.account import Session, open_session
@@ -52,7 +52,7 @@ class LoginView(tk.Frame):
         self.rowconfigure(0, weight=1)
         self.rowconfigure(5, weight=2)
         mark = tk.Canvas(self, width=px(48), height=px(48), background=PAPER, highlightthickness=0)
-        icons.logo(mark, px(24), px(24), px(48), ACCENT, WHITE)
+        icons.logo(mark, px(24), px(24), px(48), ACCENT, ON_ACCENT)
         mark.grid(row=1, column=0, pady=(px(16), px(14)))
         label(self, "Secure File Share", style="display").grid(row=2, column=0)
         tagline = "Encrypt and sign files on your computer. A smart contract decides who receives the key."

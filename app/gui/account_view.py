@@ -20,7 +20,7 @@ from app.services.models import KeyStatus
 WIDTH = 640
 _KEY_STATUS = {
     KeyStatus.NOT_REGISTERED: ("Not registered", "amber", "Others cannot verify your files or send you keys yet."),
-    KeyStatus.MATCHES: ("Registered", "accent", "The keys on-chain match this keystore."),
+    KeyStatus.MATCHES: ("Registered", "success", "The keys on-chain match this keystore."),
     KeyStatus.MISMATCH: ("Different keys on-chain", "red", "This address registered other keys earlier."),
 }
 

@@ -31,6 +31,8 @@ from app.gui.theme import (
     PAGE_PAD,
     RADIUS,
     RED,
+    SUCCESS,
+    SUCCESS_SOFT,
     SURFACE,
     font,
     measure,
@@ -98,7 +100,7 @@ class FilePicker(tk.Canvas):
         name = _fit(self._path.name, width - px(84) - measure("small_strong", action))
         self.create_text(px(64), y - px(9), text=name, anchor="w", fill=INK, font=font("strong"))
         if self._protected:
-            note, colour = "Protected and registered", ACCENT
+            note, colour = "Protected and registered", SUCCESS
         else:
             note, colour = format_size(self._size), INK_2
         self.create_text(px(64), y + px(10), text=note, anchor="w", fill=colour, font=font("small"))
@@ -163,14 +165,14 @@ class ProtectPage(Page):
         label(column, "What happens", style="heading").pack(anchor="w", pady=(0, px(16)))
         self._steps = StepChain(column, _STEPS, wrap=STEPS_WRAP)
         self._steps.pack(anchor="w", fill="x")
-        self._result = Panel(column, padding=20, background=ACCENT_SOFT, border=ACCENT_SOFT)
+        self._result = Panel(column, padding=20, background=SUCCESS_SOFT, border=SUCCESS_SOFT)
         result = self._result.body
         label(result, "Registered", style="heading").pack(anchor="w")
         text = "Share the file ID with the people who need the file. They request access with it."
         label(result, text, style="small", colour=INK_2, wrap=STEPS_WRAP).pack(anchor="w", pady=(px(4), px(10)))
         self._result_id = label(result, "", style="mono", wrap=STEPS_WRAP)
         self._result_id.pack(anchor="w")
-        buttons = tk.Frame(result, background=ACCENT_SOFT)
+        buttons = tk.Frame(result, background=SUCCESS_SOFT)
         buttons.pack(anchor="w", pady=(px(14), 0))
         Button(buttons, "Copy file ID", self._copy_id, kind="secondary", size="sm", icon="copy").pack(side="left")
         Link(buttons, "Go to My files", self._open_file).pack(side="left", padx=(px(16), 0))

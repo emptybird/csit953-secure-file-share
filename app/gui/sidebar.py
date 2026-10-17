@@ -20,12 +20,12 @@ from app.gui.theme import (
     INK,
     INK_2,
     LINE,
+    ON_ACCENT,
     PAPER,
     RADIUS,
     SIDEBAR_HOVER,
     SIDEBAR_WIDTH,
     SURFACE,
-    WHITE,
     font,
     measure,
     px,
@@ -117,7 +117,7 @@ class Sidebar(tk.Frame):
         brand = tk.Frame(self, background=PAPER)
         brand.pack(fill="x", padx=px(20), pady=(px(22), px(26)))
         mark = tk.Canvas(brand, width=px(28), height=px(28), background=PAPER, highlightthickness=0)
-        icons.logo(mark, px(14), px(14), px(28), ACCENT, WHITE)
+        icons.logo(mark, px(14), px(14), px(28), ACCENT, ON_ACCENT)
         mark.pack(side="left")
         label(brand, "Secure File Share", style="strong").pack(side="left", padx=(px(10), 0))
 

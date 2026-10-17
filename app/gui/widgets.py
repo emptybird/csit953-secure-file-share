@@ -31,6 +31,7 @@ from app.gui.theme import (
     INK_3,
     LINE,
     LINE_STRONG,
+    ON_ACCENT,
     PAPER,
     RADIUS,
     RED,
@@ -39,9 +40,10 @@ from app.gui.theme import (
     RED_SOFT,
     RED_SOFT_PRESSED,
     SLATE_SOFT,
+    SUCCESS_SOFT,
+    SUCCESS_TEXT,
     SUNKEN,
     SURFACE,
-    WHITE,
     font,
     measure,
     px,
@@ -114,10 +116,10 @@ class _CanvasControl(tk.Canvas):
 
 # kind: background, text, border, hover, pressed (None = the surface behind the button)
 _BUTTON_KINDS: dict[str, tuple[str | None, str, str | None, str, str]] = {
-    "primary": (ACCENT, WHITE, None, ACCENT_HOVER, ACCENT_PRESSED),
+    "primary": (ACCENT, ON_ACCENT, None, ACCENT_HOVER, ACCENT_PRESSED),
     "secondary": (SURFACE, INK, LINE_STRONG, HOVER, SUNKEN),
     "ghost": (None, ACCENT, None, ACCENT_SOFT, ACCENT_SOFT_PRESSED),
-    "danger": (RED, WHITE, None, RED_HOVER, RED_PRESSED),
+    "danger": (RED, ON_ACCENT, None, RED_HOVER, RED_PRESSED),
     "danger_ghost": (None, RED, None, RED_SOFT, RED_SOFT_PRESSED),
     "danger_outline": (SURFACE, RED, RED_SOFT_PRESSED, RED_SOFT, RED_SOFT_PRESSED),
     "quiet": (None, INK_2, None, HOVER, SUNKEN),
@@ -538,18 +540,20 @@ class Checkbox(tk.Frame):
             outline=outline,
         )
         if self._value:
-            icons.draw(box, "check", size / 2, size / 2, size * 0.8, WHITE, max(1.6, px(2)))
+            icons.draw(box, "check", size / 2, size / 2, size * 0.8, ON_ACCENT, max(1.6, px(2)))
 
 
 # ------------------------------------------------------------------ badge
 
-# tone: background, text
+# tone: background, text. "success" is for outcomes (approved, registered, verified);
+# "accent" is neutral emphasis (network, shared files).
 TONES = {
     "accent": (ACCENT_SOFT, ACCENT_HOVER),
+    "success": (SUCCESS_SOFT, SUCCESS_TEXT),
     "amber": (AMBER_SOFT, AMBER),
     "red": (RED_SOFT, RED),
     "slate": (SLATE_SOFT, INK_2),
-    "solid": (ACCENT, WHITE),
+    "solid": (ACCENT, ON_ACCENT),
 }
 
 
