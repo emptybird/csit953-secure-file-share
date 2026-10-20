@@ -1,62 +1,65 @@
-# contracts — SecureFileShare
+# contracts: SecureFileShare
 
-DESIGN.md 第 5 节的合约实现。Foundry 项目，solc 0.8.30，optimizer 200 runs。
+> Chinese version: [README.zh.md](README.zh.md).
+
+The contract from section 5 of [DESIGN.md](../DESIGN.md). A Foundry project: solc 0.8.30, optimizer with 200 runs.
 
 ```
-src/SecureFileShare.sol                  合约
-test/utils/BaseTest.sol                  共用 fixture：Alice 是 owner，Bob/Carol 申请，Mallory 无权限，Nobody 没登记公钥
-test/Registration.t.sol                  registerKeys、registerFile、view 函数
-test/AccessControl.t.sol                 请求状态机、owner 检查、停用文件
-test/Fuzz.t.sol                          随机调用者、随机字节串的性质测试
-test/invariant/                          handler（带参考模型）+ 4 条 invariant
-lib/forge-std                            测试库 v1.17.0，直接放进仓库，clone 后不用再装
+src/SecureFileShare.sol                  the contract
+test/utils/BaseTest.sol                  shared fixture: Alice owns the files, Bob and Carol request, Mallory has no rights, Nobody has no registered keys
+test/Registration.t.sol                  registerKeys, registerFile, view functions
+test/AccessControl.t.sol                 request state machine, owner checks, deactivated files
+test/Fuzz.t.sol                          property tests with random callers and random byte strings
+test/invariant/                          handler with a reference model, and 4 invariants
+lib/forge-std                            test library v1.17.0, committed, so no install is needed after cloning
 ```
 
-## 常用命令（在 `contracts/` 下执行）
+## Common commands (run in `contracts/`)
 
 ```sh
 forge build
-forge test                       # 56 个测试：单元 + fuzz 1000 次 + invariant 256 轮 × 64 步
-forge test --mt S1 -vvv          # 只跑名字里带 S1 的用例
+forge test                       # 59 tests: unit, fuzz (1000 runs each) and invariant (256 runs × 64 calls)
+forge test --mt S1 -vvv          # only the tests whose name contains S1
 forge test --gas-report
-forge coverage --no-match-coverage "test|lib"   # 当前 100% 行 / 语句 / 分支 / 函数
-slither . --filter-paths "lib|test"
+forge coverage --no-match-coverage "test|lib"   # currently 100% of lines, statements, branches and functions
+slither . --filter-paths "contracts/(lib|test)/"
 ```
 
-测试名里的 `S1`…`S16` 对应 DESIGN.md 10.2 的安全测试矩阵。合约层覆盖 S1–S5、S12、S14（长度和前缀）、S16；
-S15 靠链的 nonce 机制，留给 pytest 集成测试；其余几项在客户端。
+`S1` to `S16` in test names refer to the security test matrix in DESIGN.md 10.2. The contract tests cover S1–S5, S12, S14 (length and prefix) and S16. S15 relies on the chain's nonce check, so the pytest integration tests cover it. The other scenarios are checked by the client.
 
-Invariant 测试的 handler 维护一份参考状态机，每次调用前先预测「该成功还是该 revert」，和合约实际结果对比。
-4 条 invariant：非 owner 的 owner-only 调用从未成功；每次调用结果都与模型一致；链上状态与模型一致；
-wrappedKey 非空 ⇔ status == Approved。在副本上试过 5 种故意引入的 bug，都被 invariant 测试抓到：
-删掉 approve 的 `onlyFileOwner`；删掉 revoke 里的 `delete req.wrappedKey`；允许从 Approved 直接 reject；
-approve 不检查 active；允许 Approved 状态再次申请。Demo 时可以现场演示其中一种。
+The invariant handler keeps a reference state machine. Before each call it predicts whether the call should succeed or revert, then compares that with what the contract did. The 4 invariants:
 
-## 部署
+- no owner-only call by a non-owner ever succeeded;
+- every call had the result the model predicted;
+- the on-chain state matches the model;
+- `wrappedKey` is non-empty ⇔ `status == Approved`.
 
-### 本地链
+On a copy of the contract we planted 5 bugs, and the invariant tests caught each one: `onlyFileOwner` removed from approve; `delete req.wrappedKey` removed from revoke; reject allowed straight from Approved; approve not checking `active`; a new request allowed while Approved. Any of them works as a live demo.
+
+## Deployment
+
+Run these from the repository root.
+
+### Local chain
 
 ```sh
-./scripts/start_chain.sh                        # 另开一个终端；状态存在 .chain/state.json
+./scripts/start_chain.sh                        # in another terminal; the state is kept in .chain/state.json
 cp .env.example .env.local
 conda activate 953-a2
 python scripts/deploy.py --network local
 ```
 
-`deploy.py` 依次执行：`forge build` → 把 ABI 和 bytecode 导出到 `app/chain/abi/SecureFileShare.json` →
-核对 RPC 的 chainId 与 `.env.local` 一致 → 部署 → 把 `CONTRACT_ADDRESS`、`DEPLOY_BLOCK` 写回 `.env.local`。
-本地链用 Anvil 托管的 0 号开发账户发交易，代码和配置里都没有私钥。
-没装 Foundry 的组员（Windows）运行时会直接用仓库里已导出的 artifact 部署；`--export-only` 只导出不部署。
+`deploy.py` runs `forge build`, exports the ABI and bytecode to `app/chain/abi/SecureFileShare.json`, checks that the RPC's chainId matches `.env.local`, deploys, and writes `CONTRACT_ADDRESS` and `DEPLOY_BLOCK` back to `.env.local`. On the local chain it sends from Anvil's development account 0, which the node unlocks itself, so no private key appears in code or config. Team members without Foundry (Windows) deploy from the artifact already exported in the repository. `--export-only` exports without deploying.
 
 ### Sepolia
 
 ```sh
-cast wallet import deployer --interactive       # 私钥加密存到 ~/.foundry/keystores/deployer
-cp .env.example .env.sepolia                    # 换成文件里注释掉的 Sepolia 三行
+cast wallet import deployer --interactive       # stores the private key, encrypted, in ~/.foundry/keystores/deployer
+cp .env.example .env.sepolia                    # then switch to the three Sepolia lines commented out in the file
 python scripts/deploy.py --network sepolia --keystore ~/.foundry/keystores/deployer
 ```
 
-密码用 getpass 读取，不回显。在 Etherscan 上验证源码（API key 写在 `.env.sepolia`，不出现在命令行里）：
+The password is read with getpass and not echoed. To verify the source on Etherscan (the API key goes in `.env.sepolia`, never on the command line):
 
 ```sh
 cd contracts
@@ -64,12 +67,12 @@ set -a; source ../.env.sepolia; set +a
 forge verify-contract "$CONTRACT_ADDRESS" src/SecureFileShare.sol:SecureFileShare --chain sepolia --watch
 ```
 
-## Gas（Anvil 实测，含 21000 基础费用）
+## Gas (measured on Anvil, including the 21,000 base cost)
 
-| 操作 | gasUsed |
+| Operation | gasUsed |
 |---|---|
-| 部署 | 1,295,598 |
-| registerKeys（首次 / 轮换） | 162,342 / 54,444 |
+| Deployment | 1,295,598 |
+| registerKeys (first time / replacing keys) | 162,342 / 54,444 |
 | registerFile | 187,279 |
 | requestAccess | 50,773 |
 | approveAccess | 122,801 |
@@ -77,31 +80,25 @@ forge verify-contract "$CONTRACT_ADDRESS" src/SecureFileShare.sol:SecureFileShar
 | revokeAccess | 41,578 |
 | deactivateFile | 28,477 |
 
-DESIGN.md 10.4 的 Sepolia 取证（E1–E6，含 3 笔故意失败的交易）合计约 2.6M gas，乘以当时的 gas price 就是需要的测试币。
+The Sepolia evidence in DESIGN.md 10.4 (E1–E6, including 3 transactions that fail on purpose) uses about 2.6M gas in total. Multiply by the current gas price to get the test ETH you need.
 
 ## Slither
 
-`slither . --filter-paths "lib|test"`：102 个检测器，2 条结果，都是 `timestamp` 误报。
-被标出的是 `getFile` 和 `_requireFileOwner` 里的 `owner == address(0)`、`owner != msg.sender`，比较的是地址；
-Slither 把整个 `FileRecord` 标成了「受时间戳影响」，因为同一个 struct 里的 `registeredAt` 来自 `block.timestamp`。
-合约里没有任何基于时间的判断。
+`slither . --filter-paths "contracts/(lib|test)/"`: 102 detectors, 2 results, both `timestamp` false positives. Slither matches the filter against absolute paths, so the shorter `"lib|test"` would also hide `src/` whenever the project sits in a folder whose name contains "test".
 
-## 与 DESIGN.md 5.2 / 5.3 的差异
+The flagged lines are `owner == address(0)` and `owner != msg.sender` in `getFile` and `_requireFileOwner`, which compare addresses. Slither marks the whole `FileRecord` as timestamp-dependent because `registeredAt`, in the same struct, comes from `block.timestamp`. The contract makes no decision based on time.
 
-1. 多了两个 error：`InvalidHash`（ctHash 或 manifestHash 为零）、`LabelTooLong`（publicLabel 超过 128 字节）。
-   对应 5.6「所有输入做长度和非零校验」。
-2. `registerKeys` 拒绝 sigPubKey 与 encPubKey 相同，把 4.1 的「用途分离」落实到合约。
-3. `approveAccess` 要求文件仍是 active：停用后不能再批准新的人，但 reject 和 revoke 照常可用。
-4. 新增 `computeFileId(owner, salt)` view。客户端加密前就要用 fileId 构造 AAD，调用它能保证和合约算法一致。
-5. view 函数返回 struct：`getUserKeys` → `(sigPubKey, encPubKey)`，`getFile` → `FileRecord`，
-   `getRequest` → `Request`。web3.py 拿到的是按字段顺序排列的 tuple。
-   `getFile` 遇到不存在的文件会 revert `FileNotFound`；`getRequest` 对没申请过的组合返回 `Status.None`（0）。
-6. `app/chain/abi/SecureFileShare.json` 的格式是 `{contractName, compiler, abi, bytecode}`，客户端读 `["abi"]`。
+## Differences from DESIGN.md 5.2 / 5.3
 
-## 给客户端的提示
+1. Two more errors: `InvalidHash` (ctHash or manifestHash is zero) and `LabelTooLong` (publicLabel longer than 128 bytes). They implement "every input is checked for length and non-zero values" from 5.6.
+2. `registerKeys` rejects a sigPubKey equal to the encPubKey, so the contract itself enforces the separate key roles of 4.1.
+3. `approveAccess` requires the file to be active: after deactivation nobody new can be approved, but reject and revoke still work.
+4. A new view, `computeFileId(owner, salt)`. The client needs the fileId for the AAD before it encrypts; calling this view guarantees the same formula as the contract.
+5. The views return structs: `getUserKeys` → `(sigPubKey, encPubKey)`, `getFile` → `FileRecord`, `getRequest` → `Request`. web3.py returns them as tuples in field order. `getFile` reverts with `FileNotFound` for an unknown file; `getRequest` returns `Status.None` (0) for a pair that never requested.
+6. `app/chain/abi/SecureFileShare.json` has the format `{contractName, compiler, abi, bytecode}`; the client reads `["abi"]`.
 
-- `Status` 枚举：0 None、1 Pending、2 Approved、3 Rejected、4 Revoked。
-- revert 在 web3.py 里抛 `ContractCustomError`，`exc.data` 前 4 字节是 error selector，可以用 ABI 里的 error 条目还原名字。
-- 轮换 `sigPubKey` 以后，旧文件的 manifest 签名要用旧公钥验证，而 V4 从链上读到的是新公钥。
-  可以从 `KeysRegistered` 事件里找文件登记时生效的公钥，或者干脆规定签名公钥不轮换。
-  `encPubKey` 同理：批准后才轮换的话，旧 wrappedKey 只能用旧私钥解开。
+## Notes for the client
+
+- `Status` enum: 0 None, 1 Pending, 2 Approved, 3 Rejected, 4 Revoked.
+- In web3.py a revert raises `ContractCustomError`. The first 4 bytes of `exc.data` are the error selector; the error entries in the ABI turn it back into a name.
+- After `sigPubKey` is replaced, old manifests still need the old public key, but V4 reads the new one from the chain. One fix is to find the key that was active when the file was registered in the `KeysRegistered` events; another is a rule that signing keys are never replaced. The same goes for `encPubKey`: if it is replaced after an approval, the old wrappedKey only opens with the old private key. The client does neither. Replacing keys needs an explicit confirmation ("Replace on-chain keys" on the Account page) that warns about both effects, and DESIGN.md section 11 lists this as a limitation.

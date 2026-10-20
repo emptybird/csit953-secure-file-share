@@ -125,6 +125,13 @@ class TestMaliciousPlaintext:
         with pytest.raises(DecryptionError, match="header"):
             aead.decrypt_file(dek, ctx, obj)
 
+    def test_invisible_character_in_header_name(self, dek: bytes, ctx: FileContext) -> None:
+        """A malicious owner can skip the client's check; the requester's parser runs it again."""
+        header = canonical_json({"name": "invoice\u202efdp.exe", "mime": "text/plain", "size": 1, "salt": "00" * 16})
+        obj = _seal_raw(dek, ctx, len(header).to_bytes(4, "big") + header + b"x")
+        with pytest.raises(DecryptionError, match="header"):
+            aead.decrypt_file(dek, ctx, obj)
+
 
 class TestInputValidation:
     @pytest.mark.parametrize(
@@ -135,6 +142,22 @@ class TestInputValidation:
     def test_rejects_unsafe_file_names(self, dek: bytes, ctx: FileContext, name: str) -> None:
         with pytest.raises(EncodingError):
             _encrypt(dek, ctx, name=name)
+
+    @pytest.mark.parametrize(
+        "name",
+        ["invoice\u202efdp.exe", "re\u200bport.pdf", "a\x85b", "a\u2028b"],
+        ids=["rtl-override", "zero-width-space", "c1-control", "line-separator"],
+    )
+    def test_rejects_invisible_characters(self, dek: bytes, ctx: FileContext, name: str) -> None:
+        """U+202E would make "invoice<U+202E>fdp.exe" display as "invoiceexe.pdf"."""
+        with pytest.raises(EncodingError, match="formatting"):
+            _encrypt(dek, ctx, name=name)
+
+    @pytest.mark.parametrize("name", ["报告 2026.pdf", "cafe\u0301 menu.txt", "résumé.docx"])
+    def test_accepts_international_names(self, dek: bytes, ctx: FileContext, name: str) -> None:
+        """Letters and combining accents (macOS stores names decomposed) stay allowed."""
+        decrypted = aead.decrypt_file(dek, ctx, _encrypt(dek, ctx, name=name).object_bytes)
+        assert decrypted.header.name == name
 
     @pytest.mark.parametrize("mime", ["", "text/plain; charset=utf-8", "tëxt/plain"])
     def test_rejects_bad_mime(self, dek: bytes, ctx: FileContext, mime: str) -> None:

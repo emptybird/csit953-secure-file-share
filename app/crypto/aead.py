@@ -12,6 +12,7 @@ Each DEK encrypts exactly one object, so a random 96-bit nonce never repeats.
 from __future__ import annotations
 
 import os
+import unicodedata
 from dataclasses import dataclass, field
 
 from cryptography.exceptions import InvalidTag
@@ -47,6 +48,10 @@ MIN_OBJECT_LEN = len(OBJECT_MAGIC) + NONCE_LEN + TAG_LEN
 
 _HEADER_FIELDS = frozenset({"name", "mime", "size", "salt"})
 _FORBIDDEN_NAMES = frozenset({".", ".."})
+# Unicode categories a file name may not contain: controls (Cc), invisible format
+# characters (Cf, e.g. U+202E RIGHT-TO-LEFT OVERRIDE, which makes "invoice<U+202E>fdp.exe"
+# display as "invoiceexe.pdf"), lone surrogates (Cs) and line or paragraph separators.
+_FORBIDDEN_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
 
 
 @dataclass(frozen=True)
@@ -158,10 +163,14 @@ def check_dek(dek: bytes) -> None:
 
 
 def _check_file_name(name: str) -> None:
-    """A bare file name: no directories, so saving it can never escape the chosen folder."""
+    """A bare file name: no directories, so saving it can never escape the chosen folder,
+    and no invisible characters, so the name on screen is the name that gets saved.
+    Owners pass this check when encrypting; requesters pass it again when decrypting,
+    because a malicious owner need not use this client."""
     require_str(name, "File name", max_chars=MAX_NAME_CHARS)
-    if name in _FORBIDDEN_NAMES or any(ch in "/\\" or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in name):
-        raise EncodingError("File name must not contain path separators or control characters")
+    unsafe = any(ch in "/\\" or unicodedata.category(ch) in _FORBIDDEN_CATEGORIES for ch in name)
+    if name in _FORBIDDEN_NAMES or unsafe:
+        raise EncodingError("File name must not contain path separators, control or formatting characters")
 
 
 def _check_mime(mime: str) -> None:

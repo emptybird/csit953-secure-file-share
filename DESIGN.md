@@ -1,217 +1,219 @@
-# CSIT953 Assignment 2 — Secure File Sharing System 技术方案
+# CSIT953 Assignment 2: Secure File Sharing System, Technical Design
 
-> 截止：2026-10-28（周三）23:30 · 小组作业（≤5 人）· 总分 30（实现+报告 26，Demo 4）
-> 资料依据：`task_requirement.md`、Lab 1–4、Week 2–11 slides。表中「课程」一栏写明出处，报告里可直接引用。
+> Due 11:30 pm, Wed 28 Oct 2026 · group work (up to 5 people) · 30 marks (implementation and report 26, demo 4)
+> Sources: `task_requirement.md`, Labs 1–4 and the Week 2–11 slides. "W3" means the Week 3 lecture. The "Course" column names the source, so the report can cite it.
+> Chinese version: [DESIGN.zh.md](DESIGN.zh.md) (as of 18 Oct 2026).
 
 ---
 
-## 0. 一页摘要
+## 0. Summary
 
-**一句话方案**：客户端先用 AES-256-GCM 加密文件、用 ECDSA(secp256k1) 签名，密文放进不可信的链下存储；
-智能合约登记文件、管理「申请 → 批准/拒绝 → 撤销」状态机，并强制只有文件 owner 能审批；
-批准时 owner 用 ECIES 把文件密钥 DEK 加密给申请人，密文直接存在合约里。
+**The plan in brief**
+- The client encrypts each file with AES-256-GCM and signs it with ECDSA (secp256k1). Only ciphertext goes to off-chain storage, which is untrusted.
+- A smart contract registers files and runs the workflow request → approve or reject → revoke. Only the file's owner can decide.
+- On approval, the owner encrypts the file key (DEK) for the requester with ECIES and stores the result in the contract.
 
-| 层 | 选型 | 理由 | 课程 |
+| Layer | Choice | Why | Course |
 |---|---|---|---|
-| 语言 | Python 3.11+ | Lab 1/3/4 都是 Python，组员熟悉 | Lab 1/3/4 |
-| 合约 | Solidity ^0.8.24 | Lab 2 用过；0.8 自带溢出检查 | Lab 2, W3 |
-| 区块链 | 开发和自动化测试用 **Anvil 本地链**；最终版部署到 **Sepolia**，在上面取证和 Demo，本地链备用（见 5.1） | 本地链秒级出块、可复现；Sepolia 有 Etherscan 公开记录，老师可以自己核对 | Lab 1/2 |
-| 合约编译/测试 | Foundry（`forge build` / `forge test`，含 fuzz） | `vm.prank` + `vm.expectRevert` 写未授权测试很直接 | W10 fuzzing |
-| 链交互 | web3.py 7.x + eth-account | Lab 1 同款 | Lab 1 |
-| 密码库 | **pyca/cryptography**（OpenSSL 后端） | AES-GCM、HKDF、ECDSA/ECDH secp256k1、scrypt 全有；底层是广泛审计的 OpenSSL | 替代 Lab 的 py_ecc |
-| 链下存储 | 本地目录模拟不可信云对象存储，按密文 SHA-256 内容寻址；两台电脑演示时可加一个 HTTP 存储服务（见 2.2） | 任务书允许；内容寻址自带完整性锚点 | W4 object storage |
-| GUI | Tkinter/ttk 桌面应用（复用 quiz2/quiz3 的 theme 和线程模式，兼容性见 8.1） | 零额外依赖，组员写过 | Lab 3 GUI |
-| 测试 | pytest、forge test、Slither、Bandit、Gitleaks | 覆盖功能、未授权、静态分析、密钥泄露扫描 | W9, W10 |
+| Language | Python 3.11+ | Labs 1, 3 and 4 use Python; the team knows it | Labs 1/3/4 |
+| Contract | Solidity ^0.8.24 | Used in Lab 2; 0.8 checks for overflow | Lab 2, W3 |
+| Blockchain | **Anvil** local chain for development and automated tests; the final version on **Sepolia** for evidence and the demo, with the local chain as backup (see 5.1) | Local chain: instant blocks, reproducible. Sepolia: public Etherscan records the marker can check | Labs 1/2 |
+| Contract build and tests | Foundry (`forge build`, `forge test`, including fuzzing) | `vm.prank` and `vm.expectRevert` make tests of unauthorized calls easy | W10 fuzzing |
+| Chain access | web3.py 7.x + eth-account | Same as Lab 1 | Lab 1 |
+| Crypto library | **pyca/cryptography** (OpenSSL) | Has AES-GCM, HKDF, ECDSA and ECDH on secp256k1, and scrypt; built on the widely audited OpenSSL | Replaces py_ecc from the labs |
+| Off-chain storage | A local folder that simulates untrusted cloud object storage, addressed by the SHA-256 of the ciphertext; an HTTP storage service could be added for a two-computer demo (see 2.2) | Allowed by the brief; content addressing gives an integrity anchor for free | W4 object storage |
+| GUI | Tkinter desktop app (quiz3's threading pattern; compatibility in 8.1) | No extra dependencies; the team has used it | Lab 3 GUI |
+| Testing | pytest, forge test, Slither, Bandit, Gitleaks | Functions, unauthorized calls, static analysis, secret scanning | W9, W10 |
 
-**六个关键决定**（报告里每条都要写「为什么」）：
+**Six key decisions** (the report must explain why for each one):
 
-1. **信封加密**：每个文件一把随机 DEK，DEK 再按接收人分别包装（per-recipient wrapping）。（W4 envelope encryption）
-2. **AEAD 而非 CTR**：Lab 4 的 CTR 每条消息都从同一计数器开始，密钥流重复且没有完整性；改用 AES-256-GCM + 随机 nonce + AAD 绑定上下文。
-3. **每个用户三把密钥，用途分离**：交易账户密钥、签名密钥、加密密钥。签名私钥不能顺带签交易。
-4. **公钥登记上链**：地址 → 公钥的绑定由持有该地址的人发交易写入，解决 W7 的 public key substitution 和 W6 的 DH 中间人问题。
-5. **ECIES 做密钥分发**：非交互（申请人可以离线）、每次包装用临时密钥、HKDF 绑定 fileId 和 requester，防止把一份 wrappedKey 挪到别处用。
-6. **链上最小化**：链上只放随机 fileId、哈希、公钥、密文形式的 wrappedKey 和状态；文件名、明文哈希、DEK 都不上链。
+1. **Envelope encryption**: a random DEK per file, wrapped separately for each recipient (per-recipient wrapping). (W4 envelope encryption)
+2. **AEAD, not CTR**: Lab 4's CTR mode starts every message from the same counter, so the keystream repeats and nothing protects integrity. We use AES-256-GCM with a random nonce and AAD that binds the context.
+3. **Three keys per user, one job each**: a transaction key, a signing key and an encryption key. The key that signs files never signs transactions.
+4. **Public keys registered on-chain**: the holder of an address writes the address → public key binding with their own transaction. This solves public key substitution (W7) and the DH man-in-the-middle problem (W6).
+5. **ECIES for key sharing**: non-interactive (the requester can be offline), a fresh ephemeral key for every wrap, and HKDF bound to the fileId and the requester, so a wrapped key cannot be reused elsewhere.
+6. **Minimal on-chain data**: only a random fileId, hashes, public keys, wrapped keys (ciphertext) and request states. No file names, plaintext hashes or DEKs.
 
 ---
 
-## 1. 评分项 → 设计 → 证据
+## 1. Marking criteria → design → evidence
 
-| 评分项 | 分 | 本方案的做法 | 报告/Demo 证据 |
+| Criterion | Marks | Our approach | Evidence for the report and demo |
 |---|---|---|---|
-| File Encryption & Decryption | 4 | AES-256-GCM，每文件独立 DEK，随机 96-bit nonce，AAD 绑定 chainId/合约/fileId/owner；加密后才上传 | 存储目录里只有密文的截图；篡改 1 字节后 GCM 报错 |
-| Digital Signatures | 2 | ECDSA-secp256k1-SHA256 签 manifest（含密文哈希 + 加盐明文摘要）；验签公钥从链上取 | 正常验签 ✓；改 manifest / 换密钥 / 改密文 ✗ |
-| Blockchain & Smart Contract | 6 | `SecureFileShare` 合约：公钥登记、文件登记、请求状态机、owner 审批、撤销、事件审计 | forge 测试报告、Sepolia 交易表和 Etherscan 截图、事件日志、Slither 结果 |
-| Secure Key Sharing | 3 | ECIES(secp256k1, HKDF-SHA256, AES-256-GCM)，93 字节 wrappedKey 存链上 | 申请人解封成功；第三方用自己的私钥解封失败；挪用失败 |
-| GUI | 3 | Owner / Requester / Activity Log 三个页签，每一步有 ✓/✗ 反馈和交易回执 | 精选截图 4–6 张 |
-| Security & Robustness | 4 | 威胁模型 + 16 项安全测试 + 静态分析 + 局限性讨论 | 安全测试矩阵（第 10 节） |
-| Written Report | 4 | ≤20 页，按第 13 节分配篇幅 | — |
-| Demonstration | 4 | 每人都能讲全流程、能现场改小功能 | 第 14 节准备清单 |
+| File Encryption & Decryption | 4 | AES-256-GCM, one DEK per file, random 96-bit nonce, AAD binds chainId, contract, fileId and owner; encrypt before upload | Screenshot of storage holding only ciphertext; GCM error after flipping one byte |
+| Digital Signatures | 2 | ECDSA-secp256k1-SHA256 over a manifest (ciphertext hash + salted plaintext digest); the verification key is read from the chain | Valid signature ✓; changed manifest, other key or changed ciphertext ✗ |
+| Blockchain & Smart Contract | 6 | `SecureFileShare`: key registry, file registry, request state machine, owner-only decisions, revocation, audit events | forge test report, Sepolia transaction table and Etherscan screenshots, event log, Slither results |
+| Secure Key Sharing | 3 | ECIES (secp256k1, HKDF-SHA256, AES-256-GCM); the 93-byte wrapped key is stored on-chain | The requester unwraps the key; a third party's key fails; a moved wrapped key fails |
+| GUI | 3 | Owner and requester pages plus an Activity page; ✓/✗ feedback and a receipt for every step | 4–6 chosen screenshots |
+| Security & Robustness | 4 | Threat model, 16 security tests, static analysis, limitations | Security test matrix (section 10) |
+| Written Report | 4 | At most 20 pages, page budget in section 13 | n/a |
+| Demonstration | 4 | Everyone can walk through the whole flow and make a small change live | Checklist in section 14 |
 
 ---
 
-## 2. 系统架构
+## 2. System architecture
 
 ```
-┌──────────────────────── 用户端（受信任）────────────────────────┐
-│  Tkinter GUI  ──►  services（owner / requester 工作流）          │
-│                     │            │              │               │
-│                 crypto/       storage/        chain/            │
-│        AES-GCM · ECDSA ·    对象存储客户端    web3.py 合约客户端  │
-│        ECIES · keystore                                        │
-│  keystore/<alias>.json（scrypt + AES-GCM 加密的三把私钥）        │
-└─────────────┬──────────────────────────────┬───────────────────┘
-              │ 密文对象 + 签名 manifest       │ 签名交易 / 读事件
-              ▼                              ▼
-   ┌───────────────────────┐      ┌───────────────────────────────┐
-   │ 链下存储（不可信）       │      │ 区块链 Anvil / Sepolia         │
-   │ objects/<ctHash>.bin  │      │ SecureFileShare 合约           │
-   │ manifests/<fileId>.json│      │ 公钥登记 · 文件记录 · 请求状态   │
-   └───────────────────────┘      │ wrappedKey · 审计事件           │
-                                  └───────────────────────────────┘
+┌───────────────────────── Client (trusted) ────────────────────────┐
+│  Tkinter GUI  ──►  services (owner / requester workflows)         │
+│                     │              │                │             │
+│                  crypto/        storage/         chain/           │
+│        AES-GCM · ECDSA ·     object store     web3.py contract    │
+│        ECIES · keystore      client           client              │
+│  keystore/<alias>.json: three private keys, scrypt + AES-GCM      │
+└──────────────┬───────────────────────────────┬────────────────────┘
+               │ ciphertext + signed manifest  │ signed transactions, events
+               ▼                               ▼
+   ┌─────────────────────────┐     ┌──────────────────────────────────┐
+   │ Off-chain storage       │     │ Blockchain: Anvil / Sepolia      │
+   │ (untrusted)             │     │ SecureFileShare contract         │
+   │ objects/<ctHash>.bin    │     │ keys · file records · requests   │
+   │ manifests/<fileId>.json │     │ wrapped keys · audit events      │
+   └─────────────────────────┘     └──────────────────────────────────┘
 ```
 
-- **信任边界**：只有用户自己的终端是受信任的。存储、网络、其他用户都按不可信处理；区块链只信它的完整性和顺序，不信它能保密。
-- **分层**：`services` 不依赖 GUI，测试和 CLI 脚本可以直接调用；GUI 只做展示和线程调度。
-- **任何用户都可以同时是 owner 和 requester**。Demo 时开两个 GUI 窗口，分别加载 Alice 和 Bob 的 keystore（和 quiz3 一样）。
+- **Trust boundary**: only the user's own computer is trusted. Storage, the network and other users are not. The blockchain is trusted for integrity and ordering, not for secrecy.
+- **Layers**: `services` does not depend on the GUI, so tests and scripts call it directly. The GUI only displays results and manages threads.
+- **Any user can be both owner and requester.** For the demo, open two GUI windows with Alice's and Bob's keystores (as in quiz3).
 
-### 2.1 什么上链、什么不上链
+### 2.1 What goes on-chain
 
-| 数据 | 位置 | 原因 |
+| Data | Where | Why |
 |---|---|---|
-| 用户签名公钥、加密公钥（各 33 字节压缩格式） | 链上 | 地址与公钥的权威绑定 |
-| fileId（随机 32 字节）、owner 地址、登记时间 | 链上 | 状态机和审计需要 |
-| ctHash = SHA-256(密文对象)、manifestHash | 链上 | 完整性锚点，防篡改和回滚 |
-| 请求状态、时间戳 | 链上 | 审计和访问控制 |
-| wrappedKey（DEK 的 ECIES 密文） | 链上 | 只有目标申请人能解开，公开也安全 |
-| 可选公开标签 publicLabel（只写进事件） | 链上事件 | 方便申请人识别文件；GUI 提示「公开可见」，默认留空 |
-| 明文、DEK、私钥 | **永不上链** | — |
-| 文件名、MIME、明文摘要 | 链下，且文件名在密文里 | 避免元数据泄露和明文哈希被字典猜测 |
-| 申请理由 | 不收集 | 数据最小化 |
+| Signing and encryption public keys (33-byte compressed each) | On-chain | Authoritative binding of address to keys |
+| fileId (random 32 bytes), owner address, registration time | On-chain | Needed by the state machine and the audit trail |
+| ctHash = SHA-256(ciphertext object), manifestHash | On-chain | Integrity anchors against tampering and rollback |
+| Request status, timestamps | On-chain | Audit and access control |
+| wrappedKey (the DEK encrypted with ECIES) | On-chain | Only the intended requester can open it, so it is safe in public |
+| Optional publicLabel (emitted in an event only) | On-chain event | Helps requesters recognize a file; the GUI says it is public and leaves it empty by default |
+| Plaintext, DEK, private keys | **Never on-chain** | n/a |
+| File name, MIME type, plaintext digest | Off-chain; the file name is inside the ciphertext | Avoids metadata leaks and dictionary attacks on plaintext hashes |
+| Reason for a request | Not collected | Data minimization |
 
-**要在报告里写明的事实**：Solidity 的 `private` 变量、所有 calldata、所有事件对任何人都可读，链上记录也删不掉。所以 wrappedKey 的保密性完全靠 ECIES，合约的 `msg.sender` 检查只管授权，不管保密。
+**State this in the report**: Solidity `private` variables, all calldata and all events can be read by anyone, and nothing on-chain can be deleted. Wrapped keys stay secret only because of ECIES. The contract's `msg.sender` checks control authorization, not confidentiality.
 
-### 2.2 链下存储
+### 2.2 Off-chain storage
 
-**要不要**：文件不能上链，所以必须有链下存储；但不用搭真正的文件系统或云服务。任务书 2.1 明确允许 "local storage, simulated cloud storage"，本地目录就满足要求。威胁模型里把它当作不可信的云存储（攻击者 A1）。
+**Why we need it**: files cannot go on-chain, so we need off-chain storage, but not a real file system or cloud service. Section 2.1 of the brief allows "local storage, simulated cloud storage", so a local folder is enough. The threat model treats it as untrusted cloud storage (attacker A1).
 
-**默认方案：本地目录模拟云对象存储**
+**Default: a local folder that simulates cloud object storage**
 
 ```
-storage/                          # STORAGE_DIR，所有 GUI 窗口指向同一个目录
-├── objects/ab/ab3f…e9.bin        # 密文对象，文件名 = SHA-256(内容)，按前 2 位分子目录
-└── manifests/0x7c…41.json        # 签名后的 manifest，文件名 = fileId
+storage/                          # STORAGE_DIR; every GUI window uses the same folder
+├── objects/ab/ab3f…e9.bin        # ciphertext object, named SHA-256(content), grouped by its first 2 hex digits
+└── manifests/0x7c…41.json        # signed manifest, named by fileId
 ```
 
 ```python
 class ObjectStore(Protocol):                       # app/storage/object_store.py
-    def put_object(self, data: bytes) -> str: ...  # 返回 ctHash（hex）
+    def put_object(self, data: bytes) -> str: ...  # returns ctHash (hex)
     def get_object(self, ct_hash: str) -> bytes: ...
     def put_manifest(self, file_id: str, signed_manifest: bytes) -> None: ...
     def get_manifest(self, file_id: str) -> bytes: ...
 ```
 
-- **内容寻址**：对象名就是密文的 SHA-256。链上的 ctHash 同时充当下载地址，链上不用存 URL 或路径；同样的内容写两次只存一份。
-- 存储里只有密文对象和签名 manifest，没有密钥、明文和文件名。
-- services 层对读回的数据重新算哈希（V1），不信任存储本身。
-- 写入先写临时文件再 `os.replace`，避免留下半截文件。
-- 拼路径前用正则校验 ctHash（64 位 hex）和 fileId（`0x` + 64 位 hex），防止 `../../keystore` 这类路径穿越。
-- 设大小上限（如 50 MB），超出就拒绝并提示。
-- 篡改演示脚本直接改这个目录里的文件：翻转 1 字节、换成旧版本、删除。
+- **Content addressing**: an object's name is the SHA-256 of the ciphertext, so the on-chain ctHash is also the download address. No URL or path is stored on-chain, and identical content is stored once.
+- Storage holds only ciphertext objects and signed manifests: no keys, plaintext or file names.
+- The services layer hashes everything it reads again (V1) and never trusts the store.
+- Writes go to a temporary file followed by `os.replace`, so a crash never leaves half a file.
+- ctHash (64 hex characters) and fileId (`0x` + 64 hex characters) are checked with a regex before any path is built, which blocks path traversal such as `../../keystore`.
+- Size limit of 50 MB; larger files are refused with a message.
+- The GUI's Security demo page (`SFS_DEMO=1`) edits files in this folder directly: flip one bit, change the manifest, delete, then restore with one click. Rollback to an older version (S9) is covered by pytest.
 
-**Alice 和 Bob 在两台电脑上演示时（可选）**，本地目录共享不了，有两种办法：
+**For a demo on two computers (optional, not implemented)**, a local folder cannot be shared. Two options:
 
-1. `scripts/storage_server.py`：在一台电脑上跑 HTTP 存储服务（标准库 `http.server` 或 FastAPI，约 80 行），只提供 `PUT /objects`、`GET /objects/{ctHash}`、`PUT/GET /manifests/{fileId}`。客户端换成 `HttpObjectStore`，services 层不用改。这个服务同样不可信，只存密文。
-2. 把 `STORAGE_DIR` 指向两台电脑都在同步的网盘目录（OneDrive/Dropbox/Google Drive）。不用写代码，正好对应任务书的 "public cloud services"；缺点是同步有几秒到几十秒延迟，Demo 时不好控制。
+1. `scripts/storage_server.py`: an HTTP storage service on one computer (standard `http.server` or FastAPI, about 80 lines) offering only `PUT /objects`, `GET /objects/{ctHash}` and `PUT/GET /manifests/{fileId}`. The client switches to an `HttpObjectStore`; the services layer stays the same. The service is just as untrusted and stores only ciphertext.
+2. Point `STORAGE_DIR` at a folder that both computers sync (OneDrive, Dropbox, Google Drive). No code needed, and it matches the brief's "public cloud services". The downside is a sync delay of seconds to tens of seconds, which is hard to control in a demo.
 
-建议先只做本地目录，Demo 用一台电脑开两个窗口。正常流程跑通后还有时间，再加办法 1。IPFS 不建议做：要装节点或申请 pinning 服务的 API key，对评分帮助不大。
+Recommendation: start with the local folder and demo on one computer with two windows. Add option 1 only if time allows after the normal flow works. Skip IPFS: it needs a node or an API key for a pinning service and adds little to the marks.
 
 ---
 
-## 3. 威胁模型（报告 §3 的骨架）
+## 3. Threat model (outline for report section 3)
 
-**资产**：明文文件；DEK；每个用户的三把私钥和 keystore 密码；链上记录的完整性（谁拥有什么、谁被批准）；审计日志；元数据（谁向谁申请了什么）。
+**Assets**: plaintext files; DEKs; each user's three private keys and keystore password; integrity of on-chain records (who owns what, who is approved); the audit log; metadata (who asked whom for what).
 
-**攻击者能力**
+**Attackers**
 
-| 编号 | 攻击者 | 能做什么 |
+| ID | Attacker | Can |
 |---|---|---|
-| A1 | 好奇或被攻破的存储方 | 读取、修改、删除、替换成旧版本密文和 manifest |
-| A2 | 未授权的注册用户 | 发任意合约调用：批准别人的文件、批准自己的请求、重复申请；读取全部链上数据 |
-| A3 | 网络/链上观察者 | 看到所有交易、calldata、事件；可以在公链上抢跑交易 |
-| A4 | 公钥替换攻击者 | 在 owner 获取申请人公钥的路径上换成自己的公钥（W7） |
-| A5 | 已被批准、之后被撤销的申请人 | 保留之前拿到的 DEK 和明文 |
+| A1 | Curious or compromised storage provider | Read, modify, delete or roll back ciphertexts and manifests |
+| A2 | Unauthorized registered user | Make any contract call: approve someone else's file, approve their own request, request repeatedly; read all on-chain data |
+| A3 | Network or chain observer | See all transactions, calldata and events; front-run transactions on a public chain |
+| A4 | Public key substitution attacker | Swap in their own key on the path where the owner fetches the requester's key (W7) |
+| A5 | Requester who was approved and later revoked | Keep the DEK and plaintext they already obtained |
 
-**受信任组件**：用户终端和本程序客户端；cryptography/OpenSSL 的实现；操作系统 CSPRNG；区块链共识和顺序；经过测试的合约代码；本地 RPC 节点返回的数据（Sepolia 场景下要信任 RPC 提供方，列为局限）。
+**Trusted components**: the user's computer and this client; the cryptography/OpenSSL implementation; the operating system's CSPRNG; blockchain consensus and ordering; the tested contract code; the data returned by the local RPC node (on Sepolia we must trust the RPC provider, which is listed as a limitation).
 
-**安全假设**：secp256k1 上 ECDLP 困难；AES-256 和 GCM 安全；SHA-256 抗碰撞；用户保管好 keystore 密码；owner 对内容负责——签名证明「谁签的」，不证明内容真实（W3：区块链会忠实保存错误输入）。
+**Assumptions**: ECDLP on secp256k1 is hard; AES-256 and GCM are secure; SHA-256 is collision-resistant; users keep their keystore passwords safe; owners are responsible for content. A signature proves who signed, not that the content is true (W3: a blockchain faithfully stores wrong input).
 
-**不在范围内**：终端中毒或被盗（W4：E2EE 不保护端点）；已授权用户主动外泄明文；存储方删除文件导致的可用性问题（能检测，不能阻止）。
+**Out of scope**: malware on, or theft of, the user's computer (W4: end-to-end encryption does not protect endpoints); authorized users leaking plaintext on purpose; storage deleting files (detected, not prevented).
 
-**STRIDE → 控制措施**
+**STRIDE → controls**
 
-| 威胁 | 控制 |
+| Threat | Control |
 |---|---|
-| Spoofing（冒充 owner 或替换公钥） | 公钥只能由地址持有人上链登记；验签公钥从链上读取；审批时合约检查 `msg.sender == owner` |
-| Tampering（改密文、manifest、回滚） | 链上 ctHash/manifestHash + ECDSA 签名 + GCM tag + 加盐明文摘要 |
-| Repudiation | 所有关键动作是签名交易并触发事件，不可抵赖 |
-| Information disclosure | 客户端加密；DEK 只以 ECIES 密文出现；文件名在密文里；链上不放明文哈希 |
-| Denial of service | 合约无循环、无外部调用；fileId 由 `msg.sender` 参与生成，抢跑无法占用别人的 fileId |
-| Elevation of privilege | `onlyFileOwner` 修饰器；状态机拒绝非法跳转；合约没有 admin 和升级入口 |
+| Spoofing (posing as the owner, swapping public keys) | Only the holder of an address can register its keys; verification keys are read from the chain; the contract checks `msg.sender == owner` for every decision |
+| Tampering (ciphertext, manifest, rollback) | On-chain ctHash and manifestHash, ECDSA signature, GCM tag, salted plaintext digest |
+| Repudiation | Every important action is a signed transaction that emits an event |
+| Information disclosure | Client-side encryption; the DEK appears only as ECIES ciphertext; the file name is inside the ciphertext; no plaintext hash on-chain |
+| Denial of service | No loops and no external calls in the contract; the fileId includes `msg.sender`, so front-running cannot take someone else's fileId |
+| Elevation of privilege | `onlyFileOwner` modifier; the state machine rejects invalid transitions; no admin and no upgrade path |
 
 ---
 
-## 4. 密码学设计
+## 4. Cryptographic design
 
-### 4.1 用户密钥体系
+### 4.1 User keys
 
-| 密钥 | 算法 | 用途 | 公钥去向 |
+| Key | Algorithm | Used only for | Public key goes to |
 |---|---|---|---|
-| `K_eth` | secp256k1（以太坊账户） | 只签交易、付 gas | 地址 |
-| `K_sig` | ECDSA secp256k1 + SHA-256 | 只签文件 manifest | `registerKeys` 上链 |
-| `K_enc` | secp256k1 ECDH | 只接收 ECIES 包装的 DEK | `registerKeys` 上链 |
+| `K_eth` | secp256k1 (Ethereum account) | Signing transactions and paying gas | The address |
+| `K_sig` | ECDSA secp256k1 + SHA-256 | Signing file manifests | On-chain via `registerKeys` |
+| `K_enc` | secp256k1 ECDH | Receiving ECIES-wrapped DEKs | On-chain via `registerKeys` |
 
-**为什么分三把**：
-- 用 `K_eth` 直接签任意 32 字节哈希很危险：同样的签名操作可能被诱导签下一笔交易，以太坊为此才有 EIP-191 前缀。分开以后，文件签名的泄露不影响资产和链上权限。
-- `K_enc` 可以单独轮换（`registerKeys` 再调用一次），不用换账户地址。
-- 三把密钥的暴露面不同，分开后单一泄露的影响范围更小（W4 key hierarchy、blast radius）。
+**Why three keys**:
+- Using `K_eth` to sign arbitrary 32-byte hashes is dangerous: the same operation could be tricked into signing a transaction, which is why Ethereum has the EIP-191 prefix. With separate keys, a leaked file signature affects neither funds nor on-chain rights.
+- `K_enc` can be replaced on its own (call `registerKeys` again) without changing the account address (limitation 11 in section 11 says what this breaks).
+- Each key is exposed differently, so separating them limits the damage of a single leak (W4 key hierarchy, blast radius).
 
-**Keystore**（`keystore/<alias>.json`，已加入 `.gitignore`）：
+**Keystore** (`keystore/<alias>.json`, git-ignored):
 
 ```json
 { "version": 1, "address": "0x…",
-  "kdf": { "name": "scrypt", "n": 131072, "r": 8, "p": 1, "salt": "<16B hex>" },
-  "cipher": { "name": "AES-256-GCM", "nonce": "<12B hex>" },
-  "ciphertext": "<GCM(密码派生密钥, {eth_sk, sig_sk, enc_sk})>" }
+  "kdf": { "name": "scrypt", "n": 131072, "r": 8, "p": 1, "salt": "<16-byte hex>" },
+  "cipher": { "name": "AES-256-GCM", "nonce": "<12-byte hex>" },
+  "ciphertext": "<GCM(key from password, {eth_sk, sig_sk, enc_sk})>" }
 ```
 
-- 密码 → scrypt → 32 字节密钥 → AES-256-GCM。密码错误时 GCM 校验失败，统一提示「密码错误或文件损坏」，不区分原因。
-- 私钥由 `secrets`/OpenSSL 生成。**不用 `random`**：Lab 3/4 的 `random.randint` 是 Mersenne Twister，输出可预测。
-- 同一个 keystore 两条链通用：本地链上由 `create_users.py` 从 Anvil 开发账户给这些地址转测试 ETH；Sepolia 上用水龙头领取或互相转账。Anvil 开发账户的私钥是公开的固定值，只用来部署和转账，不放进用户 keystore。
-- Lab 1 的 `key.json` 和从 MetaMask 导出的私钥都是明文，用 `scripts/import_key.py` 导入加密 keystore 后删除明文文件。
+- Password → scrypt → 32-byte key → AES-256-GCM. A wrong password fails the GCM check. The message is always "wrong password or corrupted keystore" and never says which.
+- Private keys come from `secrets`/OpenSSL. **Never `random`**: the `random.randint` used in Labs 3 and 4 is a Mersenne Twister, whose output can be predicted.
+- One keystore works on both chains. On the local chain, the GUI's "Add 100 test ETH" button (`anvil_setBalance`) funds the address; on Sepolia, use a faucet or transfer between accounts. Anvil's development keys are public fixed values, used only to deploy the contract and never stored in a user keystore.
+- There is no script to import an existing private key (the planned `scripts/import_key.py`). A keystore created in the GUI comes with a new address; on Sepolia, send it test ETH from a Lab 1 or MetaMask account. No plaintext private key enters this project.
 
-### 4.2 文件加密（AES-256-GCM）
+### 4.2 File encryption (AES-256-GCM)
 
 ```
-DEK      = os.urandom(32)                                  # 每文件一把
-salt32   = os.urandom(32)                                  # 生成 fileId 用
-fileId   = keccak256(abi.encode(owner, salt32))            # 与合约算法一致
+DEK      = os.urandom(32)                                  # one per file
+salt32   = os.urandom(32)                                  # used to derive the fileId
+fileId   = keccak256(abi.encode(owner, salt32))            # same as the contract
 header   = canonical_json({name, mime, size, salt: os.urandom(16)})
-P        = len(header) (4B, big-endian) ‖ header ‖ file_bytes
-AAD      = "SFS-v1" ‖ chainId(32B) ‖ contract(20B) ‖ fileId(32B) ‖ owner(20B)
+P        = len(header) (4 bytes, big-endian) ‖ header ‖ file_bytes
+AAD      = "SFS-v1" ‖ chainId (32 bytes) ‖ contract (20) ‖ fileId (32) ‖ owner (20)
 nonce    = os.urandom(12)
-object   = "SFS1" ‖ nonce ‖ AESGCM(DEK).encrypt(nonce, P, AAD)   # 末尾含 16B tag
-ctHash   = SHA-256(object)        → 存成 objects/<ctHash>.bin
+object   = "SFS1" ‖ nonce ‖ AESGCM(DEK).encrypt(nonce, P, AAD)   # ends with the 16-byte tag
+ctHash   = SHA-256(object)        → stored as objects/<ctHash>.bin
 ```
 
-- **为什么 GCM**：一次运算同时得到保密性和完整性，篡改任何字节都会在解密时报 `InvalidTag`。CTR 只加密不认证，攻击者翻转密文位就能定向改明文。
-- **nonce**：每把 DEK 只加密一次，随机 nonce 不存在碰撞风险；即便以后支持多版本，也是换新 DEK。
-- **AAD**：把密文绑定到「哪条链、哪个合约、哪个文件、哪个 owner」。存储方把 A 文件的密文换成 B 文件的，解密直接失败。
-- **文件名放进 P**：存储方和链上观察者都看不到文件名；P 里的 16 字节随机盐让明文摘要无法被字典猜测（见 4.3）。
-- **限制**：整个文件读入内存，适合 Demo 规模（<100 MB）；分块流式加密列为未来工作。
+- **Why GCM**: one operation gives both confidentiality and integrity; changing any byte makes decryption fail with `InvalidTag`. CTR only encrypts: an attacker who flips ciphertext bits flips the same plaintext bits.
+- **Nonce**: each DEK encrypts exactly one object, so a random nonce cannot collide. A new version of a file would get a new DEK.
+- **AAD**: binds the ciphertext to its chain, contract, file and owner. If storage swaps file A's ciphertext for file B's, decryption fails.
+- **File name inside P**: neither storage nor chain observers see it. The random 16-byte salt in P stops anyone from confirming a guessed file against the plaintext digest (see 4.3).
+- **Limit**: the whole file is read into memory, which is fine at demo sizes (the app accepts up to 50 MB). Streaming encryption is future work.
 
-### 4.3 数字签名（ECDSA secp256k1）
+### 4.3 Digital signatures (ECDSA secp256k1)
 
-签名对象是一份规范化 JSON（key 排序、无空白）：
+The signed object is canonical JSON (sorted keys, no whitespace):
 
 ```json
 { "schema": "sfs-manifest/1", "chainId": 31337, "contract": "0x…",
@@ -221,69 +223,71 @@ ctHash   = SHA-256(object)        → 存成 objects/<ctHash>.bin
 ```
 
 ```
-σ = ECDSA_Sign(K_sig, SHA-256(manifest_bytes))        # (r, s)
-manifests/<fileId>.json = { manifest, signature: {r, s} }   # 不存签名公钥
-manifestHash = SHA-256(manifest_bytes)                → 上链
+σ = ECDSA_Sign(K_sig, SHA-256(manifest_bytes))              # (r, s)
+manifests/<fileId>.json = { manifest, signature: {r, s} }   # the signing public key is not stored
+manifestHash = SHA-256(manifest_bytes)                      → on-chain
 ```
 
-**申请人的验证顺序**（GUI 逐项打 ✓/✗）：
+**What the requester checks, in order** (the GUI marks each one ✓ or ✗):
 
-| 步骤 | 检查 | 能发现什么 |
+| Step | Check | Detects |
 |---|---|---|
-| V1 | SHA-256(下载的 object) == 链上 ctHash | 存储方改密文、换成旧版本 |
-| V2 | SHA-256(manifest) == 链上 manifestHash | 改 manifest |
-| V3 | manifest 里的 fileId/owner/chainId/contract/ctHash 与链上一致 | 跨文件、跨链挪用 |
-| V4 | ECDSA_Verify(**链上登记的** owner `sigPubKey`, manifest, σ) | 伪造签名、攻击者用自己的密钥重签 |
-| — | 解封 DEK（第 6 节） | — |
-| V5 | AES-GCM 解密，tag 通过 | 密文损坏、AAD 不匹配 |
-| V6 | SHA-256(P) == manifest.ptDigest | 解出的内容就是 owner 签的那份；防 owner 给不同人不同密钥 |
+| V1 | SHA-256(downloaded object) == on-chain ctHash | Storage changed the ciphertext or rolled it back |
+| V2 | SHA-256(manifest) == on-chain manifestHash | Changed manifest |
+| V3 | fileId, owner, chainId, contract and ctHash in the manifest match the chain | Manifest moved from another file or chain |
+| V4 | ECDSA_Verify(owner's `sigPubKey` **as registered on-chain**, manifest, σ) | Forged signature; an attacker re-signing with their own key |
+| Key | Unwrap the DEK (section 6) | A wrapped key made for another file or person |
+| V5 | AES-GCM decryption, tag valid | Damaged ciphertext, wrong AAD |
+| V6 | SHA-256(P) == manifest.ptDigest | Confirms the content is what the owner signed, so an owner cannot give different requesters different content |
 
-全部通过才启用「保存明文」按钮。
+Saving is enabled only when every check passes.
 
-**设计理由**：
-- 签名同时覆盖密文哈希（解密前就能验证）和明文摘要（解密后确认内容），对应任务书「retrieved file corresponds to the data originally signed」。
-- 签名公钥只从链上取，不信存储里附带的任何公钥——这就是 V4 能识别「攻击者重签」的原因。
-- nonce k 由 OpenSSL 的 CSPRNG 生成（W3：nonce 重复或有偏差会泄露私钥）。
-- ECDSA 签名可延展（(r, s) 与 (r, N−s) 都有效）。本系统不拿签名当标识符，所以没有影响；实现时可顺手规范成 low-s。
-- **和 Lab 3 的关联**：测试里用 py_ecc 按 Lab 3 的公式 `X = u1·G + u2·Q, r ≡ X.x mod N` 独立复验我们的签名。Demo 时如果被要求「手工验一个签名」可以直接用。
+**Rationale**:
+- The signature covers both the ciphertext hash (checked before decryption) and the plaintext digest (confirms the content after decryption). This matches the brief's "retrieved file corresponds to the data originally signed".
+- The verification key comes only from the chain, never from anything in storage. That is why V4 catches an attacker who re-signs.
+- The nonce k is derived from the private key and the message as in RFC 6979 (`deterministic_signing=True` in cryptography), so it does not depend on runtime randomness (W3: a repeated or biased nonce leaks the private key).
+- ECDSA signatures are malleable: (r, s) and (r, N−s) are both valid. We never use a signature as an identifier, so this does no harm. Still, signatures are normalized to low s, and verification accepts only low s.
+- **Link to Lab 3**: a test verifies our signatures again with py_ecc using Lab 3's formula `X = u1·G + u2·Q, r ≡ X.x mod N`. Handy if the demo asks you to verify a signature by hand.
 
-### 4.4 对 Lab 代码的改进清单（报告里很好用）
+### 4.4 Improvements over the lab code (good material for the report)
 
-| Lab 里的做法 | 问题 | 本方案 |
+| Lab practice | Problem | This project |
 |---|---|---|
-| `random.randint` 生成私钥和 ECDSA nonce（Lab 3/4） | 非密码学随机数，可预测 → 私钥可被恢复 | `secrets` / OpenSSL CSPRNG |
-| AES-CTR，`Counter.new(128)` 每次从同一起点（Lab 4） | 密钥流重复；没有完整性 | AES-256-GCM + 随机 nonce + AAD |
-| `SHA-256(str(k))` 当会话密钥（Lab 4） | 没有 KDF、没有上下文绑定 | HKDF-SHA256，info 绑定 fileId/requester |
-| 公钥直接通过 TCP 交换（Lab 4） | 中间人可替换公钥（W6） | 公钥由地址持有人上链登记 |
-| `pickle.loads` 反序列化网络数据（Lab 4） | 任意代码执行 | 只用 JSON 和固定格式二进制 |
-| 私钥明文写进 JSON 文件（Lab 1/3/4） | 文件泄露即私钥泄露 | scrypt + AES-GCM 加密的 keystore |
-| py_ecc 纯 Python 点运算 | 非常数时间，有侧信道风险 | cryptography（OpenSSL）；py_ecc 只在测试里做交叉验证 |
+| `random.randint` for private keys and the ECDSA nonce (Labs 3/4) | Not a cryptographic RNG; predictable, so private keys can be recovered | Private keys from the OpenSSL CSPRNG; ECDSA nonce derived as in RFC 6979 |
+| AES-CTR with `Counter.new(128)` starting from the same value every time (Lab 4) | Repeated keystream; no integrity | AES-256-GCM, random nonce, AAD |
+| `SHA-256(str(k))` as the session key (Lab 4) | No KDF, no context binding | HKDF-SHA256 with info bound to fileId and requester |
+| Public keys exchanged directly over TCP (Lab 4) | A man in the middle can swap keys (W6) | Keys registered on-chain by the address holder |
+| `pickle.loads` on network data (Lab 4) | Arbitrary code execution | Only JSON and fixed binary formats |
+| Private keys in plain JSON files (Labs 1/3/4) | A leaked file leaks the key | Keystore encrypted with scrypt + AES-GCM |
+| Pure-Python point arithmetic in py_ecc | Not constant-time; side-channel risk | cryptography (OpenSSL); py_ecc only for cross-checks in tests |
 
 ---
 
-## 5. 区块链与智能合约
+## 5. Blockchain and smart contract
 
-### 5.1 网络部署方案（已定）
+### 5.1 Networks (decided)
 
-| 阶段 | 链 | 用途 |
+| Stage | Chain | Purpose |
 |---|---|---|
-| 开发、自动化测试 | Anvil 本地链（chainId 31337，`anvil --state .chain/state.json`） | forge test、pytest 集成测试、调试、现场修改任务 |
-| 最终取证 | Sepolia（chainId 11155111） | 部署最终版，跑正常流程和未授权场景，截 Etherscan（清单见 10.4） |
-| Demo | Sepolia 为主，本地链备用 | 网络或 RPC 出问题时一分钟内切到本地链 |
+| Development and automated tests | Anvil local chain (chainId 31337, `anvil --state .chain/state.json`) | forge test, pytest integration tests, debugging, live modification tasks |
+| Final evidence | Sepolia (chainId 11155111) | Deploy the final version, run the normal flow and the unauthorized cases, take Etherscan screenshots (list in 10.4) |
+| Demo | Sepolia first, local chain as backup | Switch to the local chain within a minute if the network or RPC fails |
 
-**切换方式**：`.env.local` 和 `.env.sepolia` 两份配置，各含 `RPC_URL`、`CHAIN_ID`、`CONTRACT_ADDRESS`、`DEPLOY_BLOCK`、`EXPLORER_URL`；登录页用下拉框选网络。代码里不写任何链相关常量。
+**Switching networks**: two config files, `.env.local` and `.env.sepolia`, each with `RPC_URL`, `CHAIN_ID`, `CONTRACT_ADDRESS`, `DEPLOY_BLOCK` and `EXPLORER_URL`. The login page has a network drop-down. The code has no chain-specific constants.
 
-**Sepolia 操作要点**
+**Sepolia notes**
 
-- **账户和测试币**：至少准备 Alice（owner）、Bob（requester）、Mallory（未授权）三个账户，每个都要有 Sepolia ETH 付 gas。先在本地链用 `forge test --gas-report` 量出每个函数的 gas，再按当时的 gas price 估算需要多少。水龙头常有每日限额或要求主网余额，**第一周就去领**；Lab 1 账户有余额的话可以转给其他账户。
-- **部署**：用 `cast wallet import` 生成加密 keystore，再用 `forge create`/`forge script` 部署，命令行和 `.env` 里都不出现私钥；或者照 Lab 2 用 Remix + MetaMask 部署。部署后把合约地址和区块号填进 `.env.sepolia`。
-- **源码验证**：在 Etherscan 上 Verify & Publish 合约源码。验证后交易列表会显示解码后的函数名（如 Approve Access），老师可以直接在 Etherscan 上读合约。Etherscan API key 属于 secret，放 `.env`，不入库。
-- **RPC**：Lab 1 用的公共节点 `https://ethereum-sepolia-rpc.publicnode.com` 可用，但有限速，`eth_getLogs` 也限制区块跨度。读事件时从 `DEPLOY_BLOCK` 开始分段查（例如每段 5000 块）。另申请一个免费的 Alchemy 或 Infura 节点做备用，API key 放 `.env`。
-- **出块慢**：约 12 秒一个块。GUI 发出交易后立即显示 tx hash 和 Etherscan 链接，状态显示 Pending，确认后再显示区块号和 gas；等待超过 120 秒给出提示。同一账户一次只发一笔交易，避免 nonce 冲突。
-- **尽早试部署**：Sepolia 在 10 月 6 日刚完成 Glamsterdam 升级。第 2–3 天先部署一个测试版合约，确认编译器、web3.py、RPC 都正常。
-- **Windows 组员**：Foundry 需要 Git Bash 或 WSL；不方便的话本地链用 `npx hardhat node` 代替 Anvil，Python 侧只换 RPC URL。
+- **Accounts and test ETH**: at least three accounts, Alice (owner), Bob (requester) and Mallory (unauthorized), each with Sepolia ETH for gas. Measure the gas of each function on the local chain with `forge test --gas-report`, then estimate the ETH needed from the current gas price. Faucets often have daily limits or require a mainnet balance, so **claim test ETH in the first week**. A Lab 1 account with a balance can send ETH to the others.
+- **Deployment**: create an encrypted keystore with `cast wallet import` and deploy with `python scripts/deploy.py --network sepolia --keystore …` (see `contracts/README.md`), so no private key appears on the command line or in `.env`. Remix + MetaMask, as in Lab 2, also works. `deploy.py` writes the contract address and block number into `.env.sepolia`.
+- **Source verification**: Verify & Publish the source on Etherscan. Etherscan then shows decoded function names (for example Approve Access), and the marker can read the contract there. The Etherscan API key is a secret: keep it in `.env`, never in git.
+- **RPC**: the public node from Lab 1, `https://ethereum-sepolia-rpc.publicnode.com`, works but is rate-limited, and `eth_getLogs` limits the block range. Events are read from `DEPLOY_BLOCK` in chunks of 5000 blocks. Get a free Alchemy or Infura endpoint as a backup and keep its API key in `.env`.
+- **Slow blocks**: about 12 seconds per block. After sending a transaction, the GUI shows the tx hash and an Etherscan link at once, then the block and gas once confirmed, and a warning after 120 seconds. Each account sends one transaction at a time, to avoid nonce clashes.
+- **Deploy early**: Sepolia completed the Glamsterdam upgrade on 6 October. Deploy a test version on day 2 or 3 to confirm that the compiler, web3.py and the RPC all work.
+- **Windows team members**: Foundry needs Git Bash or WSL. Otherwise use `npx hardhat node` instead of Anvil; the Python side only needs a different RPC URL.
 
-### 5.2 合约接口（`contracts/SecureFileShare.sol`）
+### 5.2 Contract interface (`contracts/src/SecureFileShare.sol`)
+
+The implemented contract adds a few input checks; see "Differences from DESIGN.md 5.2 / 5.3" in `contracts/README.md`.
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -292,7 +296,7 @@ pragma solidity ^0.8.24;
 contract SecureFileShare {
     enum Status { None, Pending, Approved, Rejected, Revoked }
 
-    struct UserKeys   { bytes sigPubKey; bytes encPubKey; }            // 各 33B 压缩公钥
+    struct UserKeys   { bytes sigPubKey; bytes encPubKey; }            // 33-byte compressed keys
     struct FileRecord { address owner; uint64 registeredAt; bool active;
                         bytes32 ctHash; bytes32 manifestHash; bytes ownerWrappedKey; }
     struct Request    { Status status; uint64 updatedAt; bytes wrappedKey; }
@@ -344,7 +348,7 @@ contract SecureFileShare {
 }
 ```
 
-一个完整函数示例：
+A complete function:
 
 ```solidity
 function approveAccess(bytes32 fileId, address requester, bytes calldata wrappedKey)
@@ -360,22 +364,22 @@ function approveAccess(bytes32 fileId, address requester, bytes calldata wrapped
 }
 ```
 
-### 5.3 每个函数强制执行的规则
+### 5.3 Rules enforced by each function
 
-| 函数 | 调用者 | 前置条件（不满足即 revert） | 效果 |
+| Function | Caller | Preconditions (otherwise it reverts) | Effect |
 |---|---|---|---|
-| `registerKeys` | 任何人 | 两个公钥都是 33 字节，首字节 0x02/0x03 | 写入/轮换 `msg.sender` 的公钥 |
-| `registerFile` | 任何人 → 成为 owner | 已登记公钥；ctHash、manifestHash 非零；ownerWrappedKey 长度 93；fileId 未被占用 | 新建文件记录，`active = true` |
-| `requestAccess` | 非 owner | 文件存在且 active；调用者已登记公钥；状态 ∈ {None, Rejected, Revoked} | → Pending |
-| `approveAccess` | **仅 owner** | 状态 == Pending；wrappedKey 长度 93 | → Approved，保存 wrappedKey |
-| `rejectAccess` | **仅 owner** | 状态 == Pending | → Rejected |
-| `revokeAccess` | **仅 owner** | 状态 == Approved | → Revoked，删除 wrappedKey |
-| `deactivateFile` | **仅 owner** | 文件 active | 不再接受新申请 |
+| `registerKeys` | Anyone | Both keys are 33 bytes and start with 0x02 or 0x03 | Sets or replaces the keys of `msg.sender` |
+| `registerFile` | Anyone, who becomes the owner | Keys registered; ctHash and manifestHash non-zero; ownerWrappedKey is 93 bytes; fileId unused | New file record, `active = true` |
+| `requestAccess` | Anyone except the owner | File exists and is active; caller has registered keys; status is None, Rejected or Revoked | → Pending |
+| `approveAccess` | **Owner only** | Status is Pending; wrappedKey is 93 bytes | → Approved, wrappedKey stored |
+| `rejectAccess` | **Owner only** | Status is Pending | → Rejected |
+| `revokeAccess` | **Owner only** | Status is Approved | → Revoked, wrappedKey deleted |
+| `deactivateFile` | **Owner only** | File is active | No new requests |
 
-- **fileId 由 `msg.sender` 参与计算**：公链上即便有人抢跑同一个 salt，算出的也是另一个 fileId，占不了 owner 的位置。
-- 申请人自己调用 `approveAccess` 会因为不是 owner 而 revert，任务书点名的「unauthorized users cannot approve」由此保证。
+- **The fileId includes `msg.sender`**: on a public chain, someone who front-runs with the same salt gets a different fileId and cannot take the owner's.
+- A requester who calls `approveAccess` on their own request reverts because they are not the owner. This is how the brief's "unauthorized users cannot approve" is guaranteed.
 
-### 5.4 请求状态机
+### 5.4 Request state machine
 
 ```
             requestAccess              approveAccess (owner)
@@ -388,70 +392,70 @@ function approveAccess(bytes32 fileId, address requester, bytes calldata wrapped
      └────────────────────────────┴──────────► Pending ◄─────────────┘
 ```
 
-**不变量**（写成 forge invariant/fuzz 测试）：`wrappedKey` 非空 ⇔ `status == Approved`；任何非 owner 地址都无法让状态离开 Pending。
+**Invariants** (checked by forge invariant and fuzz tests): `wrappedKey` is non-empty ⇔ `status == Approved`; no address other than the owner can move a request out of Pending.
 
-### 5.5 审计记录
+### 5.5 Audit trail
 
-- 六类事件覆盖任务书要求的「文件登记、访问申请、批准/拒绝」，外加撤销和停用。
-- GUI 的 Activity Log 页签用 `get_logs` 从部署区块读到最新区块，显示区块号、交易哈希、事件、fileId、操作者，并能导出 CSV 当报告证据。
-- 交易回执（tx hash、block、gasUsed）在每次操作后显示在状态栏。
+- Events record what the brief requires (file registration, access requests, approval and rejection), plus revocation, deactivation and key registration.
+- The GUI's Activity page reads the logs with `get_logs` from the deploy block to the latest block. It shows block number, transaction hash, event, file and account, and exports CSV as evidence for the report.
+- After every transaction, the GUI shows its receipt (tx hash, block, gasUsed).
 
-### 5.6 合约自身的安全
+### 5.6 Contract security
 
-- 不收发 ETH，不调用外部合约 → 没有重入面（W2 列出的 reentrancy/unchecked call 不适用，报告里说明原因）。
-- **没有 admin、没有升级、没有 pause**：系统里不存在一把能改别人数据的特权密钥（W2 的 bridge 被盗案例正是 admin key 失守）。
-- Solidity 0.8 自带溢出检查；所有输入做长度和非零校验；状态变更函数里没有循环，gas 有上界。
-- custom error 让 GUI 能把 revert 原因翻译成人话（例如「只有文件 owner 能审批」）。
-- `forge test` 覆盖每个 revert 分支；`slither .` 静态分析，结果放进报告附录。
+- No ETH comes in or goes out and no other contract is called, so there is no reentrancy surface. (The reentrancy and unchecked-call issues from W2 do not apply; explain why in the report.)
+- **No admin, no upgrade, no pause**: no privileged key can change other people's data. (The bridge thefts in W2 came from lost admin keys.)
+- Solidity 0.8 checks overflow; every input is checked for length and non-zero values; state-changing functions have no loops, so gas is bounded.
+- Custom errors let the GUI turn reverts into plain messages (for example "Only the owner of file … can do this").
+- `forge test` covers every revert branch; `slither .` runs static analysis, with the results in the report appendix.
 
 ---
 
-## 6. 安全密钥分发（ECIES）
+## 6. Secure key sharing (ECIES)
 
-### 6.1 协议
+### 6.1 Protocol
 
-Owner 批准 Bob 的申请时：
+When the owner approves Bob's request:
 
 ```
 1. encPub_B   ← contract.getUserKeys(Bob).encPubKey
-               （from_encoded_point 会拒绝不在曲线上的点，防 invalid-curve 攻击）
-2. e          ← 随机标量；E = e·G（33B 压缩）
-3. Z          = ECDH(e, encPub_B)                    # 共享点的 x 坐标，32B
+               (from_encoded_point rejects points that are not on the curve: no invalid-curve attack)
+2. e          ← random scalar; E = e·G (33-byte compressed)
+3. Z          = ECDH(e, encPub_B)                    # x-coordinate of the shared point, 32 bytes
 4. KEK        = HKDF-SHA256(IKM = Z,
                             salt = E ‖ encPub_B,
                             info = "SFS-keywrap-v1" ‖ chainId ‖ contract ‖ fileId ‖ Bob,
                             L = 32)
 5. n          ← os.urandom(12)
-6. C          = AES-256-GCM(KEK, n, DEK, AAD = fileId ‖ Bob)     # 32B + 16B tag
-7. wrappedKey = E ‖ n ‖ C                              # 33 + 12 + 48 = 93 字节
-8. approveAccess(fileId, Bob, wrappedKey)              # owner 账户签名的交易
+6. C          = AES-256-GCM(KEK, n, DEK, AAD = fileId ‖ Bob)     # 32 bytes + 16-byte tag
+7. wrappedKey = E ‖ n ‖ C                              # 33 + 12 + 48 = 93 bytes
+8. approveAccess(fileId, Bob, wrappedKey)              # transaction signed by the owner's account
 ```
 
-Bob 用 `K_enc` 算 `Z = ECDH(k_B, E)`，按同样参数派生 KEK，GCM 解出 DEK。
+Bob computes `Z = ECDH(k_B, E)` with `K_enc`, derives the same KEK, and decrypts the DEK with GCM.
 
-**Owner 自己的副本**：登记文件时 owner 给自己也包装一份（`ownerWrappedKey`）。owner 换电脑时只要有 keystore 就能恢复所有 DEK，本地不必保存任何 DEK。所有授权方统一用「每人一份 wrappedKey」模型（W4 per-recipient wrapping）。
+**The owner's own copy**: when registering a file, the owner also wraps the DEK for themselves (`ownerWrappedKey`). With just the keystore, the owner can recover every DEK on a new computer, and no DEK is stored locally. Every authorized party uses the same model of one wrapped key per person (W4 per-recipient wrapping).
 
-### 6.2 为什么这样设计
+### 6.2 Why this design
 
-| 问题 | 回答 |
+| Question | Answer |
 |---|---|
-| 为什么不用 Lab 4 的交互式 DH | Lab 4 要求双方同时在线、走 TCP；文件共享里申请人可能离线。ECIES 只需要对方的公钥，非交互 |
-| 中间人怎么防 | 接收方：公钥由 Bob 的地址发交易登记，别人改不了。发送方：wrappedKey 只能通过 `approveAccess` 写入，合约保证调用者是 owner。两端都有认证，回答了 W6「How to solve the problem? (hint: authentication)」 |
-| 为什么每次用临时密钥 e | 两次包装的 KEK 互不相关；owner 的长期私钥不参与，泄露也不影响已发出的 wrappedKey |
-| 为什么 HKDF info 里要放 fileId 和 Bob | 把文件 A 的 wrappedKey 挪到文件 B，或挪给 Carol，派生出的 KEK 和 AAD 都对不上，解封失败 |
-| 为什么 wrappedKey 可以公开放链上 | 没有 `k_B` 就算不出 Z（ECDLP/CDH 假设）；GCM 防篡改。这也是任务书允许的「encrypted key material may be stored on the blockchain」 |
-| 备选方案 | RSA-OAEP：要多维护一种密钥，密文 256B 更费 gas；X25519：同样好，为与课程保持一致选 secp256k1；把 DEK 存合约 `private` 变量：**不安全**，任何人可读存储槽；ABE/代理重加密（W4）：适合大群组，列为未来工作 |
+| Why not Lab 4's interactive DH? | Lab 4 needs both sides online over TCP, but a requester may be offline. ECIES needs only the recipient's public key: it is non-interactive |
+| How is man-in-the-middle prevented? | Receiving side: Bob's key is registered by a transaction from Bob's address, so no one else can change it. Sending side: a wrapped key can only be written by `approveAccess`, and the contract checks that the caller is the owner. Both ends are authenticated, which answers W6's "How to solve the problem? (hint: authentication)" |
+| Why a new ephemeral key e every time? | The KEKs of two wraps are unrelated, and the owner's long-term key is not involved, so a leak of it does not expose wrapped keys already sent |
+| Why put fileId and Bob in the HKDF info? | A wrapped key moved from file A to file B, or handed to Carol, derives a different KEK and fails the AAD, so unwrapping fails |
+| Why can the wrapped key be public on-chain? | Without `k_B` no one can compute Z (ECDLP/CDH assumption), and GCM detects tampering. The brief allows this: "encrypted key material may be stored on the blockchain" |
+| Alternatives | RSA-OAEP: one more key type to manage, and 256-byte ciphertexts cost more gas. X25519: equally good; we chose secp256k1 to match the course. DEK in a `private` contract variable: **insecure**, anyone can read storage slots. ABE or proxy re-encryption (W4): suited to large groups, future work |
 
-### 6.3 撤销和长期安全
+### 6.3 Revocation and long-term security
 
-- `revokeAccess` 让状态变为 Revoked 并删除 storage 里的 wrappedKey，GUI 不再提供下载。
-- **但历史删不掉**：approve 交易的 calldata 永久留在链上；Bob 之前拿到的 DEK 也仍然有效（W4：Revocation cannot erase plaintext already obtained）。
-- 真正切断未来访问的办法：owner 用新 DEK 重新加密并登记新版本，只给仍被授权的人重新包装。作为可选功能实现（「Rotate file key」），没时间就写进局限性。
-- 前向保密的局限：如果 Bob 的 `K_enc` 将来泄露，链上所有发给 Bob 的 wrappedKey 都能被解开。缓解：定期轮换 `K_enc`（`registerKeys`）。
+- `revokeAccess` sets the status to Revoked and deletes the stored wrapped key; the GUI no longer offers the download.
+- **History cannot be erased**: the calldata of the approve transaction stays on-chain forever, and a DEK Bob already obtained still works (W4: "Revocation cannot erase plaintext already obtained").
+- The real way to cut off future access: the owner encrypts again with a new DEK, registers a new version, and wraps it only for people who are still authorized. This was planned as an optional "Rotate file key" feature. It is not implemented (limitation 2 in section 11).
+- No forward secrecy: if Bob's `K_enc` leaks later, every wrapped key ever sent to Bob can be opened. Mitigation: replace `K_enc` from time to time (`registerKeys`), and keep the old keystore to open earlier wrapped keys.
 
 ---
 
-## 7. 端到端流程
+## 7. End-to-end flow
 
 ```mermaid
 sequenceDiagram
@@ -461,261 +465,267 @@ sequenceDiagram
     participant C as SecureFileShare
     participant R as Requester (Bob) GUI
 
-    Note over O,R: 0. 首次使用：各自 registerKeys(sigPub, encPub)
-    O->>O: 生成 DEK、fileId；AES-256-GCM 加密；签 manifest
-    O->>S: put(object) → ctHash；put(manifest+σ)
+    Note over O,R: 0. First use: each registers keys with registerKeys(sigPub, encPub)
+    O->>O: Create DEK and fileId; encrypt with AES-256-GCM; sign the manifest
+    O->>S: put(object) → ctHash; put(manifest + σ)
     O->>C: registerFile(salt, ctHash, manifestHash, ownerWrappedKey, label)
     C-->>R: event FileRegistered
     R->>C: requestAccess(fileId)
     C-->>O: event AccessRequested
-    O->>C: getUserKeys(Bob) → encPub_B（GUI 显示指纹供确认）
-    O->>O: 解封自己的 DEK → ECIES 包装给 Bob
+    O->>C: getUserKeys(Bob) → encPub_B (the GUI shows its fingerprint to confirm)
+    O->>O: Unwrap own DEK → wrap it for Bob with ECIES
     O->>C: approveAccess(fileId, Bob, wrappedKey)
     C-->>R: event AccessApproved
     R->>C: getFile / getRequest / getUserKeys(Alice)
-    R->>S: get(object)、get(manifest+σ)
-    R->>R: V1–V4 校验 → 解封 DEK → 解密 → V5–V6 → 保存明文
+    R->>S: get(object), get(manifest + σ)
+    R->>R: V1–V4 → unwrap DEK → decrypt → V5–V6 → save plaintext
 ```
 
-拒绝分支：owner 调 `rejectAccess`，Bob 的 GUI 状态变为 Rejected，取钥按钮保持禁用。
+Rejection: the owner calls `rejectAccess`; Bob's GUI shows Rejected and offers no key.
 
 ---
 
-## 8. GUI 设计（Tkinter）
+## 8. GUI design (Tkinter)
 
-**登录页**：选择或新建 keystore → 输入密码 → 显示地址、ETH 余额、公钥指纹、链上登记状态；未登记时提示「Register Keys」。
+The app starts on a login page, then shows a sidebar with one page per task (`app/gui/app.py`).
 
-**页签 1：My Files（Owner）**
-- 「Protect & Register」向导，逐步显示：① 加密 ✓（算法、密文大小）② 签名 ✓（manifest 哈希）③ 上传 ✓（ctHash）④ 上链 ✓（tx hash、区块、gas）。
-- 我的文件列表 + 选中文件的申请表：申请人地址、加密公钥指纹、申请时间、状态。
-- Approve / Reject / Revoke 按钮按状态启用。点 Approve 先弹确认框，写清文件、申请人地址、公钥指纹（W3：签名界面本身是安全边界，要让用户看清自己在批准什么）。
+- **Login**: choose or create a keystore, enter the password and pick the network. The sidebar then shows the address, network and balance; a banner asks for "Register keys" when the keys are not on-chain yet.
+- **Owner pages**
+  - *Protect a file*: a list of steps that fills in as each one finishes: ① encrypted (algorithm, ciphertext size) ② signed (manifest hash) ③ uploaded (ctHash) ④ registered on-chain (tx hash, block, gas).
+  - *My files*: my files and, for the selected file, its requests with requester address, encryption-key fingerprint, time and status. Approve, Reject and Revoke appear according to the status. Approve first opens a confirmation dialog with the file, the requester's address and the key fingerprint (W3: the signing screen is part of the security boundary, so users must see what they approve).
+- **Requester pages**
+  - *Browse files*: every registered file (short fileId, owner, public label, time, my status), searchable by name, file ID or owner. "Request access"; the status updates by itself, because the app polls for new events every 3 seconds on the local chain and once a block on Sepolia.
+  - *Retrieve and verify*: after approval, reads the approved request and its 93-byte wrapped key, runs V1–V4, unwraps the file key, then runs V5–V6. Each check shows ✓ or ✗ and the reason for any failure. "Save decrypted file" is enabled only when every check passes.
+- **Activity**: the contract's events as a timeline, exportable as CSV.
+- **Account**: key fingerprints, network and balance.
+- **Security demo** (only with `SFS_DEMO=1` or `--demo`): tamper with stored objects, and try to approve another owner's file with the current account, to show failure handling live.
 
-**页签 2：Browse & My Requests（Requester）**
-- 全部文件目录（短 fileId、owner、公开标签、登记时间、我的状态），可按 fileId 搜索。
-- 「Request Access」；状态每 3 秒轮询事件自动刷新。
-- 被批准后「Retrieve & Verify」：清单逐项显示 V1–V6 的 ✓/✗ 和失败原因；全部通过才启用「Decrypt & Save」。
+**Interaction rules**
+- Transactions, encryption and decryption run on worker threads; results return to the Tk thread through `after()`. Buttons that would send another transaction are disabled while one is pending, so nothing is submitted twice.
+- Contract custom errors become readable messages. Users never see a stack trace; details go to the log, which never contains key material.
+- The GUI never shows a private key or a DEK, only fingerprints (the first 8 bytes of SHA-256).
+- Every tx hash opens its page on `EXPLORER_URL` with `webbrowser.open`; without an explorer (local chain) the hash is copied instead.
+- The sidebar always shows the network (Local or Sepolia), the address and the balance, and a banner warns when the balance is low.
 
-**页签 3：Activity Log**：链上事件时间线，可导出 CSV。
+### 8.1 Tkinter compatibility
 
-**交互约定**
-- 交易和加解密放在工作线程，用 `after()` 回到主线程更新界面；执行中禁用相关按钮，避免重复提交。
-- revert 的 custom error 映射成可读提示；异常不直接把堆栈抛给用户，详细信息写日志（日志里不写任何密钥）。
-- 界面上从不显示私钥或 DEK，最多显示指纹（SHA-256 前 8 字节）。
-- 可选 Demo 页签（环境变量 `SFS_DEMO=1` 才出现）：篡改存储对象、用当前账户尝试批准别人的文件，方便现场展示失败处理。
-- 每笔交易的 tx hash 做成可点击链接，用 `webbrowser.open` 打开 `EXPLORER_URL` 上的交易页。
-- 状态栏常驻显示当前网络（Local / Sepolia）、账户地址和余额，余额不足时提示。
+Tkinter is part of the Python standard library and runs on Windows, macOS and Linux; quiz2 and quiz3 already run on your Mac. The real issues are Tk versions, appearance and threading:
 
-### 8.1 Tkinter 兼容性
-
-Tkinter 是 Python 标准库，Windows、macOS、Linux 都能跑，quiz2 和 quiz3 已经在你的 Mac 上验证过。实际问题集中在 Tk 版本、外观和线程：
-
-| 问题 | 平台 | 处理 |
+| Problem | Platform | Fix |
 |---|---|---|
-| 旧版 Tk 在新 macOS 上点击无响应、界面错乱 | macOS（系统 Python 常见） | 统一用 conda-forge 环境：`python=3.11`、`tk>=8.6.13`；启动时检查 `info patchlevel` 并提示（quiz3 `gui/app.py` 已有） |
-| Homebrew Python 没有 tkinter 模块 | macOS | 用 conda 环境；或 `brew install python-tk` |
-| 发行版自带的 Python 没装 tkinter | Linux | `sudo apt install python3-tk` 或用 conda |
-| 高分屏下界面模糊 | Windows | 启动时调用 `ctypes.windll.shcore.SetProcessDpiAwareness(1)` |
-| 默认 aqua 主题忽略按钮背景色 | macOS | 统一用 `clam` 主题（quiz3 `gui/theme.py` 已这样做） |
-| 各平台字体不同 | 全部 | 按平台选 Segoe UI / Helvetica Neue / DejaVu Sans（复用 quiz3 `theme.py`） |
-| 等待交易时界面卡死 | 全部 | Tk 不是线程安全的。链上调用和加解密放在工作线程，结果放进 `queue.Queue`，主线程用 `after()` 轮询后更新界面（quiz3 同款模式）。Sepolia 一次确认要 10–30 秒，这一点必须做好 |
-| ✓ ✗ 符号显示 | Windows | 用 U+2713 / U+2717，Segoe UI Symbol 能显示；不用彩色 emoji |
-| 中文路径和文件名 | Windows | 一律用 `pathlib`，文件按 bytes 读写 |
+| Old Tk on recent macOS ignores clicks or draws incorrectly | macOS (common with the system Python) | Use the conda-forge environment: `python=3.11`, `tk>=8.6.13`. The app checks `info patchlevel` at start and warns |
+| Homebrew Python has no tkinter | macOS | Use the conda environment, or `brew install python-tk` |
+| The distribution's Python has no tkinter | Linux | `sudo apt install python3-tk`, or use conda |
+| Blurry text on high-DPI screens | Windows | Call `ctypes.windll.shcore.SetProcessDpiAwareness(1)` at start |
+| The default aqua theme ignores button colours | macOS | The app draws its own controls on canvases (`app/gui/widgets.py`), so no ttk theme is involved |
+| Fonts differ per platform | All | Use the platform's default UI font and the first available monospace font from a list (`app/gui/theme.py`) |
+| The window freezes while waiting for a transaction | All | Tk is not thread-safe. Chain calls and crypto run on worker threads; results go into a `queue.Queue` that the Tk thread drains with `after()` (the quiz3 pattern). A Sepolia confirmation takes 10–30 seconds, so this has to work |
+| ✓ and ✗ symbols | Windows | Icons are drawn on canvases (`app/gui/icons.py`), so no symbol font or emoji is needed |
+| Non-ASCII paths and file names | Windows | Always use `pathlib`, and read and write files as bytes |
 
-**要求**：每个组员在 10/19 前用 conda 环境在自己的系统上跑通一次「空白窗口 + 连上本地链读区块号」。Windows 组员尤其要早测。
+**Requirement**: by 19 Oct, every team member runs "an empty window + read the block number from the local chain" in the conda environment on their own system. Windows users should test early.
 
 ---
 
-## 9. 工程结构
+## 9. Project structure
 
 ```
 assignment/
-├── DESIGN.md
-├── contracts/                     # Foundry 项目
+├── README.md                      # setup, running, two-user demo, tests and the S1–S16 test table
+├── DESIGN.md                      # this document (Chinese version: DESIGN.zh.md)
+├── contracts/                     # Foundry project
 │   ├── src/SecureFileShare.sol
-│   ├── test/SecureFileShare.t.sol # 单元 + fuzz + invariant
+│   ├── test/                      # Registration · AccessControl · Fuzz · invariant/
+│   ├── lib/forge-std              # committed, so no install is needed after cloning
 │   └── foundry.toml
 ├── app/
-│   ├── config.py                  # 按所选网络读 .env.local / .env.sepolia，外加 STORAGE_DIR
-│   ├── crypto/  aead.py · signing.py · ecies.py · keystore.py · encoding.py
-│   ├── storage/ object_store.py（本地目录）· http_store.py（可选）
-│   ├── chain/   client.py · errors.py · events.py · abi/SecureFileShare.json
-│   ├── services/ models.py · owner.py · requester.py · verification.py
-│   └── gui/     app.py · login_view.py · owner_view.py · requester_view.py · audit_view.py · widgets.py · theme.py
-├── tests/  unit/ · integration/ · security/
-├── scripts/ start_chain.sh · deploy.py · create_users.py · import_key.py · attack_*.py
-│            start_local_demo.sh（备用本地链，带预置状态）· storage_server.py（可选）
-├── .env.local / .env.sepolia      # 网络配置，不入库（RPC URL 可能含 API key）
-├── .env.example                   # 模板，入库，只有占位值
-├── .gitignore                     # keystore/ .env* storage/ .chain/（例外：.env.example）
-├── environment.yml                # conda env: 953-a2
-└── README.md                      # 安装、运行、测试步骤
+│   ├── config.py                  # reads .env.local or .env.sepolia for the chosen network, plus STORAGE_DIR
+│   ├── crypto/   aead.py · signing.py · ecies.py · keystore.py · encoding.py
+│   ├── storage/  object_store.py (local folder)
+│   ├── chain/    client.py · errors.py · events.py · abi/SecureFileShare.json
+│   ├── services/ models.py · account.py · owner.py · requester.py · verification.py
+│   └── gui/      app.py · login_view.py · owner_view.py · protect_view.py · requester_view.py
+│                 verify_view.py · audit_view.py · account_view.py · demo_view.py · widgets.py · theme.py …
+├── tests/        unit/ · integration/
+├── scripts/      start_chain.sh · deploy.py
+├── evidence/     EVIDENCE.md (test and scan results), logs/, collect.sh
+├── .env.local / .env.sepolia      # network settings, not in git (an RPC URL may contain an API key)
+├── .env.example                   # template in git, placeholders only
+├── .gitignore                     # keystore/ .env* storage/ .chain/ (except .env.example)
+└── environment.yml                # conda environment 953-a2
 ```
 
-**依赖**：`cryptography`、`web3`、`eth-account`、`python-dotenv`、`pytest`；测试额外 `py_ecc`（Lab 3 交叉验证）、`bandit`。系统工具：Foundry、Slither、Gitleaks。
+**Changes from the original plan**: the GUI replaces `create_users.py` (create a keystore on the login page; on the local chain, click "Add 100 test ETH"). The Security demo page and the S1–S16 tests in forge and pytest replace `attack_*.py` and `tests/security/`; README.md maps each scenario to its tests. `import_key.py`, `http_store.py`, `storage_server.py` and `start_local_demo.sh` were not built.
 
-**编码约定**（和 quiz2/quiz3 保持一致）：数据记录用 `@dataclass(frozen=True)`；单文件 200–400 行；`services` 返回结构化结果（每个验证步骤的结果对象），GUI 只负责渲染。
+**Dependencies**: `cryptography`, `web3`, `eth-account`, `python-dotenv`, `pytest`; for tests also `py_ecc` (Lab 3 cross-check) and `bandit`. Tools: Foundry, Slither, Gitleaks.
 
-**secret 管理**（W9）：keystore 和 `.env` 不进仓库；`.env.example` 只有 RPC URL 这类非敏感项；提交前跑 Gitleaks；部署用的私钥只从 keystore 或环境变量读取，不写进代码。
+**Coding conventions** (same as quiz2/quiz3): records are `@dataclass(frozen=True)`; files of about 200–400 lines; `services` return structured results (one result object per verification step), and the GUI only renders them.
+
+**Secrets** (W9): keystores and `.env` files stay out of git; `.env.example` holds only non-sensitive values such as RPC URLs; run Gitleaks before committing; deployment keys come only from a keystore or an environment variable, never from code.
 
 ---
 
-## 10. 测试计划
+## 10. Test plan
 
-### 10.1 正常流程
+### 10.1 Normal workflow
 
-| 层 | 工具 | 内容 |
+| Level | Tool | What |
 |---|---|---|
-| 单元 | pytest | AEAD 往返；ECDSA 签/验；ECIES 包装/解封；keystore 创建/解锁；manifest 规范化稳定 |
-| 交叉验证 | pytest + py_ecc | 用 Lab 3 的验签公式独立验证我们的签名 |
-| 合约 | forge test | 每个函数的正常路径和每个 revert 分支；fuzz：随机地址都无法 approve/reject/revoke 别人的文件 |
-| 集成 | pytest + Anvil | Alice 登记 → Bob 申请 → Alice 批准 → Bob 校验、解密，明文逐字节一致；拒绝分支；撤销分支 |
-| 手工 | GUI | 两个窗口跑完整流程，截图 |
+| Unit | pytest | AEAD round trip; ECDSA sign and verify; ECIES wrap and unwrap; keystore create and unlock; stable canonical manifests |
+| Cross-check | pytest + py_ecc | Verify our signatures independently with Lab 3's formula |
+| Contract | forge test | The normal path and every revert branch of each function; fuzzing: no random address can approve, reject or revoke someone else's file |
+| Integration | pytest + Anvil | Alice registers → Bob requests → Alice approves → Bob verifies and decrypts, byte-identical plaintext; the reject branch; the revoke branch |
+| Manual | GUI | The whole flow in two windows, with screenshots |
 
-### 10.2 安全与异常测试矩阵（报告核心表格）
+### 10.2 Security and failure test matrix (the key table of the report)
 
-| ID | 场景 | 预期结果 | 检出位置 |
+| ID | Scenario | Expected result | Detected by |
 |---|---|---|---|
-| S1 | Mallory 对 Alice 的文件调 `approveAccess` | revert `NotFileOwner` | 合约 |
-| S2 | Bob 批准自己的请求 | revert `NotFileOwner` | 合约 |
-| S3 | 重复批准 / 批准已拒绝的请求 | revert `InvalidStatus` | 合约 |
-| S4 | owner 申请自己的文件；申请不存在的文件；未登记公钥就申请 | 对应 revert | 合约 |
-| S5 | 用同一 salt 重复登记 | revert `FileAlreadyExists` | 合约 |
-| S6 | 存储里的密文翻转 1 字节 | V1 失败；强行解密时 GCM `InvalidTag` | 客户端 |
-| S7 | 修改 manifest 的 ptDigest | V2 失败、V4 验签失败 | 客户端 |
-| S8 | 攻击者用自己的 `K_sig` 重签伪造的 manifest | V4 失败（验签公钥来自链上） | 客户端 |
-| S9 | 把对象回滚成同一文件的旧版本 | V1 失败 | 客户端 |
-| S10 | Mallory 从链上读出发给 Bob 的 wrappedKey，用自己的 `K_enc` 解封 | GCM `InvalidTag` | 客户端 |
-| S11 | 把文件 A 的 wrappedKey 用到文件 B | HKDF info/AAD 不匹配，解封失败 | 客户端 |
-| S12 | 被拒绝 / 被撤销的用户取钥 | 链上无 wrappedKey，GUI 拒绝 | 合约 + GUI |
-| S13 | keystore 密码错误 | 无法解锁，提示不区分原因 | 客户端 |
-| S14 | 登记非法公钥（长度、前缀错误，或不在曲线上） | 合约 revert / 客户端拒绝 | 合约 + 客户端 |
-| S15 | 重放一笔已上链的 approve 交易 | 节点按 nonce 拒绝（W3） | 区块链 |
-| S16 | 抢跑：他人用同一 salt 登记 | 算出不同 fileId，不影响 owner | 合约 |
+| S1 | Mallory calls `approveAccess` on Alice's file | revert `NotFileOwner` | Contract |
+| S2 | Bob approves his own request | revert `NotFileOwner` | Contract |
+| S3 | Approve twice, or approve a rejected request | revert `InvalidStatus` | Contract |
+| S4 | Owner requests own file; request for a missing file; request without registered keys | Matching revert | Contract |
+| S5 | Register the same salt twice | revert `FileAlreadyExists` | Contract |
+| S6 | Flip one byte of the stored ciphertext | V1 fails; forced decryption fails with GCM `InvalidTag` | Client |
+| S7 | Change ptDigest in the manifest | V2 fails, V4 fails | Client |
+| S8 | Attacker re-signs a forged manifest with their own `K_sig` | V4 fails (the verification key comes from the chain) | Client |
+| S9 | Roll the object back to an older version of the same file | V1 fails | Client |
+| S10 | Mallory reads Bob's wrapped key from the chain and tries her own `K_enc` | GCM `InvalidTag` | Client |
+| S11 | Use file A's wrapped key for file B | HKDF info and AAD differ, unwrapping fails | Client |
+| S12 | A rejected or revoked user asks for the key | No wrapped key on-chain; the GUI refuses | Contract + GUI |
+| S13 | Wrong keystore password | Not unlocked; the message does not say why | Client |
+| S14 | Register an invalid public key (wrong length or prefix, or not on the curve) | Contract reverts / client refuses | Contract + client |
+| S15 | Replay an approve transaction that was already mined | The node rejects the used nonce (W3) | Blockchain |
+| S16 | Front-running: someone else registers with the same salt | Different fileId; the owner is unaffected | Contract |
 
-`scripts/attack_*.py` 复现 S1、S6–S11，输出可直接截图；pytest 的 `tests/security/` 自动断言全部 16 项。
+All of S1–S16 have automated tests: contract-side in forge, client-side in pytest. README.md's "Security test matrix" maps each scenario to its tests, and `evidence/EVIDENCE.md` records the results. For the live demo, use the GUI's Security demo page (`SFS_DEMO=1`): tamper with storage (S6, S7, a deleted object) and call approveAccess without permission (S1, S2; optionally broadcast it, so the failed transaction is mined).
 
-### 10.3 静态分析和扫描
+### 10.3 Static analysis and scanning
 
-- Slither：合约（W10 static analysis）。
-- Bandit：Python 代码。
-- Gitleaks：整个仓库及 git 历史（W9 hard-coded secrets）。
+- Slither: the contract (W10 static analysis).
+- Bandit: the Python code.
+- Gitleaks: the whole repository and its git history (W9 hard-coded secrets).
 
-### 10.4 Sepolia 取证清单
+### 10.4 Sepolia evidence checklist
 
-合约在 10/24 冻结，部署到 Sepolia 后依次执行并截图：
+The contract freezes on 24 Oct. After deploying it to Sepolia, run these steps and take screenshots:
 
-| # | 操作 | 截什么 |
+| # | Action | Screenshot |
 |---|---|---|
-| E1 | 部署合约，Verify & Publish 源码 | 合约页（绿色对勾）和部署交易 |
-| E2 | Alice、Bob 各调一次 `registerKeys` | 交易列表（函数名已解码） |
-| E3 | Alice `registerFile` → Bob `requestAccess` → Alice `approveAccess` | 三笔交易和 Logs 标签里的事件 |
-| E4 | 另一个文件：Bob 申请 → Alice `rejectAccess`；之前批准过的申请再 `revokeAccess` | 交易和事件 |
-| E5 | `approveAccess` 交易的 Input Data | 链上只有 93 字节的 wrappedKey 密文，没有明文 DEK——这是链上隐私最直接的证据 |
-| E6 | 未授权场景 S1（Mallory 批准）、S2（Bob 自批）、S3（重复批准） | 状态为 Fail 的交易，配上脚本输出的 revert 原因 |
+| E1 | Deploy the contract, Verify & Publish the source | Contract page (green tick) and deployment transaction |
+| E2 | Alice and Bob each call `registerKeys` once | Transaction list with decoded function names |
+| E3 | Alice `registerFile` → Bob `requestAccess` → Alice `approveAccess` | The three transactions and their events in the Logs tab |
+| E4 | Another file: Bob requests → Alice `rejectAccess`; then `revokeAccess` on an earlier approval | Transactions and events |
+| E5 | Input Data of the `approveAccess` transaction | Only the 93-byte wrapped key ciphertext is on-chain, no plaintext DEK: the most direct evidence of on-chain privacy |
+| E6 | Unauthorized cases: S1 (Mallory approves), S2 (Bob approves himself), S3 (approve twice) | Transactions with status Fail, plus the revert reason shown on the Security demo page |
 
-**E6 怎样让失败交易上链**：web3.py 发交易前会先 `estimate_gas`，会 revert 的调用在本地就被拦下，链上不会留记录。攻击脚本加一个 `--broadcast` 参数，手动指定 gas limit 跳过预估，交易才会上链并显示 Fail。失败交易同样消耗 gas。
+**How E6 puts failed transactions on-chain**: web3.py estimates gas before sending, so a call that would revert is stopped locally and never reaches the chain. The Security demo page's "Broadcast anyway" option sends it with a fixed gas limit instead, so the transaction is mined and shows Fail (test: `test_broadcast_failing_transaction_for_evidence`). Failed transactions still cost gas.
 
-报告里整理成一张表：操作、tx hash、区块号、gasUsed、结果。
+The page covers S1 and S2. The GUI never offers a second approval, so S3 needs a few lines of Python that call `ChainClient.transact(..., gas_limit=...)` with the owner's account; no script for this is included.
+
+Summarize them in the report as a table: action, tx hash, block, gasUsed, result.
 
 ---
 
-## 11. 局限性（报告 §10 素材）
+## 11. Limitations (material for report section 10)
 
-1. 终端可信：恶意软件可以在解密后读明文，E2EE 管不到（W4）。
-2. 已授权用户可以外传明文；撤销不能收回已发出的 DEK，只能靠换 DEK 保护后续版本。
-3. 链上元数据：谁拥有文件、谁向谁申请、时间，都是公开的社交图谱；地址是假名但可被关联。
-4. wrappedKey 永久留在链上，安全性依赖接收方 `K_enc` 长期不泄露，没有前向保密。
-5. 客户端信任 RPC 节点返回的数据：本地链是单节点，Sepolia 上依赖公共 RPC 提供方。
-6. 地址只是公钥的哈希，没有和现实身份绑定；需要线下核对指纹或引入 PKI（W7）。
-7. Python 无法可靠清零内存里的密钥。
-8. 存储方可以删文件：能检测，不能阻止；需要多副本（W4 resilience）。
-9. 整文件读入内存，不适合超大文件。
-10. 存储是本地目录模拟的云存储，没有多副本、访问控制和访问日志。
+1. The endpoint is trusted: malware can read plaintext after decryption, which end-to-end encryption cannot prevent (W4).
+2. Authorized users can leak plaintext. Revocation cannot recall a DEK already sent; only a new DEK protects later versions, and the client has no "Rotate file key" feature for that.
+3. On-chain metadata: who owns which file, who asked whom and when form a public social graph. Addresses are pseudonymous but can be linked.
+4. Wrapped keys stay on-chain forever, so their security depends on the recipient's `K_enc` never leaking. There is no forward secrecy.
+5. The client trusts the data its RPC node returns: a single node on the local chain, a public RPC provider on Sepolia.
+6. An address is only a hash of a public key, not a real-world identity. Fingerprints must be checked out of band, or a PKI added (W7).
+7. Python cannot reliably wipe keys from memory.
+8. Storage can delete files: this is detected, not prevented; preventing it would need replicas (W4 resilience).
+9. Whole files are read into memory, so very large files are not supported.
+10. Storage is a local folder that simulates cloud storage, with no replication, access control or access log.
+11. Replacing on-chain keys breaks older files: V4 checks against the owner's current signing key, and keys wrapped for an old encryption key open only with the old keystore.
+12. Registering a public key does not require proof that the caller holds the private key. Someone can register another person's public key as their own, but gains nothing: they still cannot sign or decrypt with it.
 
 ---
 
-## 12. 分工与时间表（今天 10/16 周五，截止 10/28 周三 23:30）
+## 12. Roles and timeline (planned on Fri 16 Oct; due Wed 28 Oct, 11:30 pm)
 
-| 角色 | 负责 | 主要产出 |
+| Role | Responsible for | Main output |
 |---|---|---|
-| A 合约 | 合约、forge 测试（含 fuzz/invariant）、部署脚本、Slither | `contracts/`、`scripts/deploy.py` |
-| B 密码学 | `crypto/` 全部模块、单元测试、Lab 3 交叉验证 | `app/crypto/`、`tests/unit/` |
-| C 集成 | 链客户端、存储、owner/requester 工作流、集成测试 | `app/chain/`、`app/storage/`、`app/services/` |
-| D GUI | 三个页签、线程、错误提示、截图 | `app/gui/` |
-| E 安全与报告 | 威胁模型、安全测试矩阵、攻击脚本、报告统稿、证据收集 | `tests/security/`、`scripts/attack_*.py`、报告 |
+| A Contract | Contract, forge tests (including fuzz and invariant), deploy script, Slither | `contracts/`, `scripts/deploy.py` |
+| B Cryptography | All `crypto/` modules, unit tests, Lab 3 cross-check | `app/crypto/`, `tests/unit/` |
+| C Integration | Chain client, storage, owner and requester workflows, integration tests | `app/chain/`, `app/storage/`, `app/services/` |
+| D GUI | Pages, threading, error messages, screenshots | `app/gui/` |
+| E Security and report | Threat model, security test matrix, Security demo page, report editing, evidence | README's S1–S16 table, `app/gui/demo_view.py`, `evidence/`, the report |
 
-人数不足 5 人时合并 C+E 或 D+E。Demo 是每人单独答辩，**每个人都要能讲清全部设计**，建议每天站会轮流讲一个别人的模块。
+With fewer than five people, merge C+E or D+E. Each person is assessed individually in the demo, so **everyone must be able to explain the whole design**. At the daily stand-up, take turns explaining someone else's module.
 
-| 日期 | 里程碑 |
+| Dates | Milestone |
 |---|---|
-| 10/16 五 – 10/17 六 | 方案定稿；敲定接口：ABI、wrappedKey 格式、manifest schema、AAD 格式；搭好 conda env 和 Foundry；**给 3 个以上账户领 Sepolia 测试币** |
-| 10/18 日 – 10/20 二 | 并行开发：合约 + forge 测试 / crypto + 单元测试 / 存储 + 链客户端 / GUI 骨架；10/19 前每人跑通 Tkinter + 本地链；**往 Sepolia 试部署一次** |
-| 10/21 三 – 10/23 五 | 集成：命令行跑通完整流程 → GUI 接入。**10/23 本地链上正常流程必须跑通** |
-| 10/24 六 – 10/25 日 | 合约冻结；安全测试矩阵、静态分析；部署到 Sepolia 并验证源码，按 10.4 取证 |
-| 10/26 一 – 10/27 二 | 报告成稿（≤20 页）；在 Sepolia 上彩排 Demo，演练切换到本地链，互相出题 |
-| 10/28 三 | 缓冲；23:30 前提交 |
+| Fri 16 – Sat 17 Oct | Finalize the design; agree on the interfaces (ABI, wrappedKey format, manifest schema, AAD format); set up the conda environment and Foundry; **get Sepolia test ETH for 3 or more accounts** |
+| Sun 18 – Tue 20 Oct | Parallel work: contract + forge tests / crypto + unit tests / storage + chain client / GUI skeleton. By 19 Oct everyone runs Tkinter + the local chain; **deploy to Sepolia once as a trial** |
+| Wed 21 – Fri 23 Oct | Integration: the full flow from the command line, then in the GUI. **The normal flow must work on the local chain by 23 Oct** |
+| Sat 24 – Sun 25 Oct | Contract freeze; security test matrix and static analysis; deploy to Sepolia, verify the source, collect evidence as in 10.4 |
+| Mon 26 – Tue 27 Oct | Finish the report (at most 20 pages); rehearse the demo on Sepolia, practise switching to the local chain, quiz each other |
+| Wed 28 Oct | Buffer; submit before 11:30 pm |
 
 ---
 
-## 13. 报告大纲（≤20 页，参考文献不计）
+## 13. Report outline (at most 20 pages, references excluded)
 
-| 节 | 内容 | 页数 |
+| Section | Content | Pages |
 |---|---|---|
 | 1 | Introduction & scope | 0.5 |
-| 2 | System architecture（架构图、上链/不上链表） | 2 |
-| 3 | Threat model（资产、攻击者、信任组件、假设、STRIDE 表） | 2 |
-| 4 | Cryptographic design（密钥体系、AES-GCM、签名、对 Lab 的改进） | 3 |
-| 5 | Blockchain & smart contract（接口、规则表、状态机、事件、链上隐私） | 3 |
-| 6 | Secure key sharing（ECIES 协议图、设计理由、撤销） | 2 |
-| 7 | GUI（4–6 张截图，每张标出反馈点） | 2 |
-| 8 | Implementation（模块、依赖、secret 管理，不贴大段代码） | 1 |
-| 9 | Testing & evaluation（正常流程、S1–S16 表、交易记录、Slither） | 2.5 |
+| 2 | System architecture (architecture diagram, on-chain vs off-chain table) | 2 |
+| 3 | Threat model (assets, attackers, trusted components, assumptions, STRIDE table) | 2 |
+| 4 | Cryptographic design (keys, AES-GCM, signatures, improvements over the labs) | 3 |
+| 5 | Blockchain & smart contract (interface, rules table, state machine, events, on-chain privacy) | 3 |
+| 6 | Secure key sharing (ECIES protocol diagram, rationale, revocation) | 2 |
+| 7 | GUI (4–6 screenshots, each with its feedback points marked) | 2 |
+| 8 | Implementation (modules, dependencies, secret management; no long code listings) | 1 |
+| 9 | Testing & evaluation (normal flow, S1–S16 table, transaction records, Slither) | 2.5 |
 | 10 | Security analysis & limitations | 1.5 |
 | 11 | Conclusion | 0.5 |
 
-截图挑最能说明问题的，同类只放一张；代码只放关键片段（如 `approveAccess`、ECIES 包装）。
+Choose the screenshots that show the most, one per kind. Show only key code fragments (for example `approveAccess` and the ECIES wrap).
 
 ---
 
-## 14. Demo 准备
+## 14. Demo preparation
 
-**可能的提问**
-- 为什么用 GCM，不用 Lab 4 的 CTR？
-- wrappedKey 公开放在链上，为什么安全？
-- Owner 怎么确定拿到的是 Bob 真正的公钥？
-- 非 owner 调 `approveAccess` 会发生什么？（现场演示 revert）
-- 撤销以后 Bob 还能解密吗？
-- 为什么签名私钥和交易私钥要分开？
-- 签名具体签了什么？V1–V6 各防什么？
-- 哪些数据上链了，为什么文件名不上链？
+**Likely questions**
+- Why GCM instead of Lab 4's CTR?
+- The wrapped key is public on-chain. Why is that safe?
+- How does the owner know they have Bob's real public key?
+- What happens when a non-owner calls `approveAccess`? (Show the revert live.)
+- Can Bob still decrypt after revocation?
+- Why separate the signing key from the transaction key?
+- What exactly is signed? What does each of V1–V6 protect against?
+- Which data is on-chain, and why is the file name not?
 
-**Sepolia Demo 清单**
-- 前一天确认每个账户余额够用，RPC 和备用 RPC 都能连上。
-- 提前在 Sepolia 上准备好一个已登记的文件和一个 Pending 的申请，现场只演示关键的几笔交易，少等确认。
-- 等确认的十几秒正好用来讲当前步骤在做什么。
-- 备用：`scripts/start_local_demo.sh` 启动带预置状态的 Anvil，登录页切到 Local，一分钟内恢复演示。
+**Sepolia demo checklist**
+- The day before, check every account's balance and that both the main and the backup RPC respond.
+- Prepare a registered file and a pending request on Sepolia in advance, so the demo only waits for a few key transactions.
+- Use the 10–20 seconds of each confirmation to explain the current step.
+- Backup: prepare data on the local chain in advance with `scripts/start_chain.sh` (the state is saved to `.chain/state.json` every 5 seconds and on exit), then switch to Local on the login page and resume within a minute.
 
-**可能的现场修改任务**（在本地链上做，不要在 Sepolia 上现场部署。代码保持模块化，`scripts/start_chain.sh` + `deploy.py` 几秒内重新部署）
-- 给 approve 加过期时间（`expiresAt` 字段 + `hasAccess` 视图）。
-- 新增一个事件，或给 `requestAccess` 加冷却时间。
-- 改 HKDF 的 info，观察旧 wrappedKey 无法解封，并解释原因。
-- 用 Lab 3 公式手工验证一个签名。
-- 篡改一个字节，说出是哪一步报错。
-- 删掉 `onlyFileOwner`，跑 forge test 看哪些测试失败。
+**Possible live modification tasks** (do them on the local chain; never deploy to Sepolia during the demo. The code is modular, and `scripts/start_chain.sh` + `deploy.py` redeploy in seconds)
+- Add an expiry time to approvals (an `expiresAt` field and a `hasAccess` view).
+- Add an event, or a cooldown for `requestAccess`.
+- Change the HKDF info and explain why old wrapped keys no longer open.
+- Verify a signature by hand with Lab 3's formula.
+- Change one byte and say which step fails.
+- Remove `onlyFileOwner` and run forge test to see which tests fail.
 
 ---
 
-## 15. 决定记录与待定事项
+## 15. Decisions and open questions
 
-**已定（10/16）**
-- 网络：本地链开发和自动化测试；最终版部署到 Sepolia 取证；Demo 用 Sepolia，本地链备用（5.1）。
-- UI：Tkinter 桌面应用（8、8.1）。
-- 存储：本地目录模拟云对象存储（2.2）。
+**Decided (16 Oct)**
+- Network: local chain for development and automated tests; the final version on Sepolia for evidence; the demo on Sepolia with the local chain as backup (5.1).
+- UI: Tkinter desktop app (8, 8.1).
+- Storage: a local folder that simulates cloud object storage (2.2).
 
-**待定**
-1. 本地链用 Anvil 还是 Hardhat node：看 Windows 组员能否装 Foundry。Python 侧只差一个 RPC URL。
-2. Demo 是否用两台电脑：用的话要加 HTTP 存储服务或共享网盘目录（2.2）。
-3. 可选加分项（正常流程跑通后再做）：
-   - 存储服务校验授权：下载前用 `K_eth` 签一个随机 challenge，服务查到链上状态为 Approved 才返回（W6 challenge-response、W9 passkey 思路），做纵深防御；
-   - 批准过期时间；
-   - 文件密钥轮换（撤销后换 DEK 重新加密）。
+**Open**
+1. Anvil or Hardhat node for the local chain: depends on whether Windows members can install Foundry; the Python side only needs another RPC URL. (The scripts and tests currently use Anvil.)
+2. Demo on two computers? That needs the HTTP storage service or a synced cloud folder (2.2).
+3. Optional extras, only after the normal flow works (none implemented yet):
+   - Storage checks authorization: before a download, the client signs a random challenge with `K_eth`, and the service returns data only if the chain says Approved (W6 challenge-response, W9 passkey idea), as defence in depth;
+   - Approval expiry;
+   - File key rotation (a new DEK after a revocation).

@@ -32,6 +32,7 @@ _HINTS = {
     RequestStatus.REJECTED: "The requester may submit a new request.",
     RequestStatus.REVOKED: "Wrapped key deleted. The requester may submit a new request.",
 }
+_DEACTIVATED_PENDING_HINT = "The file is deactivated and accepts no approvals. Reject to close the request."
 
 FileItem = tuple[FileSummary, tuple[AccessRequest, ...]]
 
@@ -183,26 +184,28 @@ class FilesPage(Page):
         label(key_row, "Key", style="small", colour=INK_2).pack(side="left")
         fingerprint = request.enc_fingerprint or "No keys registered"
         label(key_row, fingerprint, style="mono_small", colour=INK).pack(side="left", padx=(px(8), 0))
-        hint = f"{_HINTS.get(request.status, '')} Updated {format_time(request.updated_at)}."
+        pending_on_inactive = request.status is RequestStatus.PENDING and not summary.active
+        text = _DEACTIVATED_PENDING_HINT if pending_on_inactive else _HINTS.get(request.status, "")
+        hint = f"{text} Updated {format_time(request.updated_at)}."
         label(inner, hint, style="small", colour=INK_3, wrap=DETAIL_WRAP - 30).pack(anchor="w", pady=(px(6), 0))
-        if not summary.active and request.status is not RequestStatus.APPROVED:
+        allowed = request_actions(request.status, active=summary.active)
+        if not allowed:
             return
         actions = tk.Frame(inner, background=SURFACE)
-        if request.status is RequestStatus.PENDING:
+        if "approve" in allowed:
             approve = Button(actions, "Approve", lambda: self._approve(summary, request), kind="primary", size="sm")
-            approve.set_enabled(idle and summary.active)
-            approve.pack(side="left")
+            approve.set_enabled(idle)
+            approve.pack(side="left", padx=(0, px(8)))
+        if "reject" in allowed:
             reject = Button(actions, "Reject", lambda: self._reject(summary, request), size="sm")
             reject.set_enabled(idle)
-            reject.pack(side="left", padx=(px(8), 0))
-        elif request.status is RequestStatus.APPROVED:
+            reject.pack(side="left")
+        if "revoke" in allowed:
             revoke = Button(
                 actions, "Revoke access", lambda: self._revoke(summary, request), kind="danger_outline", size="sm"
             )
             revoke.set_enabled(idle)
             revoke.pack(side="left")
-        else:
-            return
         actions.pack(anchor="w", pady=(px(10), 0))
 
     # ------------------------------------------------------------ decisions
@@ -291,8 +294,8 @@ class FilesPage(Page):
                 DialogField("File", file_title(summary.name, summary.label), emphasis=True),
                 DialogField("File ID", file_id_text(summary.file_id), mono=True),
             ],
-            "New requests and approvals will no longer be accepted. Existing approvals remain valid. "
-            "This action cannot be undone.",
+            "New requests and approvals will no longer be accepted. Existing approvals remain valid, and "
+            "pending requests can still be rejected. This action cannot be undone.",
             "Deactivate file",
             danger=True,
         ):
@@ -310,6 +313,17 @@ class FilesPage(Page):
     def _failed(self, exc: BaseException) -> None:
         self.host.notify(describe_error(exc), Level.ERROR, title="Cannot approve")
         self.reload()
+
+
+def request_actions(status: RequestStatus, *, active: bool) -> tuple[str, ...]:
+    """The decisions offered for one request, matching what the contract accepts:
+    approveAccess needs an active file, while rejectAccess and revokeAccess also
+    work after deactivateFile, so a deactivated file never strands a request."""
+    if status is RequestStatus.PENDING:
+        return ("approve", "reject") if active else ("reject",)
+    if status is RequestStatus.APPROVED:
+        return ("revoke",)
+    return ()
 
 
 # ------------------------------------------------------------------- rows

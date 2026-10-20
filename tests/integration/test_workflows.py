@@ -314,7 +314,7 @@ class TestRequesterErrors:
 
 
 class TestStorageFailures:
-    """Detection through the real store; the full S-matrix lives in tests/security."""
+    """Detection through the real store; README.md maps every S1–S16 case to its test."""
 
     def test_tampered_object_is_reported_not_decrypted(
         self, alice: Session, bob: Session, protected: ProtectedFile

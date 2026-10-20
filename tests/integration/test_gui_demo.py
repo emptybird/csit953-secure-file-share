@@ -1,4 +1,5 @@
-"""The Demo tab's storage tampering, checked against the real V1–V6 pipeline (DESIGN.md 10.2: S6, S7, S9).
+"""The Demo tab's storage tampering, checked against the real V1–V6 pipeline
+(DESIGN.md 10.2: S6, S7 and a deleted object).
 
 Uses the tamper functions behind the Demo tab buttons directly, so no display is needed.
 """
@@ -75,11 +76,30 @@ def test_restore_keeps_the_first_original(alice: Session, protected: ProtectedFi
     obj = alice.store.object_path(protected.ct_hash.hex())  # type: ignore[attr-defined]
     original = obj.read_bytes()
     _tamper(alice, protected, "flip")
-    _tamper(alice, protected, "flip")  # flips the same bit back, but the backup is still the original
+    _tamper(alice, protected, "flip")  # starts from the original again, so the object stays one bit off
+    assert obj.read_bytes() != original
     _tamper(alice, protected, "delete")
     _tamper(alice, protected, "restore")
     assert obj.read_bytes() == original
     assert "Nothing to restore" in _tamper(alice, protected, "restore")
+
+
+@pytest.mark.parametrize(
+    ("action", "expected"),
+    [("flip", {Check.V1_CT_HASH}), ("manifest", {Check.V2_MANIFEST_HASH, Check.V4_SIGNATURE})],
+)
+def test_pressing_a_tamper_button_twice_keeps_the_file_tampered(
+    alice: Session, bob: Session, protected: ProtectedFile, action: str, expected: set[Check]
+) -> None:
+    """A second click must not undo the first; otherwise the page reports a tampered
+    file while every check passes."""
+    _approved_copy(alice, bob, protected)
+    _tamper(bob, protected, action)
+    _tamper(bob, protected, action)
+    assert _failed_checks(bob, protected) == expected
+
+    _tamper(bob, protected, "restore")
+    assert RequesterService(bob).retrieve(protected.file_id).ok
 
 
 def test_unauthorized_approve_is_rejected_before_and_after_broadcast(

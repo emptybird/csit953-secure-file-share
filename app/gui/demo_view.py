@@ -4,8 +4,9 @@ Two attacks for the live demonstration:
 
     A1 storage   flip a ciphertext byte, edit the signed manifest or delete the
                  object, then Retrieve and verify shows which check catches it
-                 (S6, S7, S9). The originals are kept as *.orig and put back by
-                 "Restore originals".
+                 (S6, S7, missing object). The originals are kept as *.orig and
+                 put back by "Restore originals". Every edit starts from the
+                 original, so pressing a button twice never undoes the first one.
     A2 user      call approveAccess on a file this account does not own (S1, S2).
                  By default gas estimation stops it before sending; "broadcast"
                  skips the estimate so the failed transaction is mined and can be
@@ -242,8 +243,7 @@ class DemoPage(Page):
 
 
 def _flip_byte(root: Path, obj: Path, _manifest: Path) -> str:
-    _backup(obj)
-    data = bytearray(obj.read_bytes())
+    data = bytearray(_original(obj))
     index = len(data) // 2
     before = data[index]
     data[index] ^= 0x01
@@ -255,8 +255,7 @@ def _flip_byte(root: Path, obj: Path, _manifest: Path) -> str:
 
 
 def _edit_manifest(root: Path, _obj: Path, manifest: Path) -> str:
-    _backup(manifest)
-    value = json.loads(manifest.read_bytes())
+    value = json.loads(_original(manifest))
     digest = value["manifest"]["ptDigest"]
     value["manifest"]["ptDigest"] = ("1" if digest[0] == "0" else "0") + digest[1:]
     manifest.write_bytes(canonical_json(value))
@@ -279,7 +278,7 @@ def _delete_object(root: Path, obj: Path, _manifest: Path) -> str:
 def _restore(root: Path, obj: Path, manifest: Path) -> str:
     restored = []
     for path in (obj, manifest):
-        backup = path.with_name(path.name + BACKUP_SUFFIX)
+        backup = _backup_path(path)
         if backup.exists():
             os.replace(backup, path)
             restored.append(str(path.relative_to(root)))
@@ -290,9 +289,21 @@ def _restore(root: Path, obj: Path, manifest: Path) -> str:
 
 def _backup(path: Path) -> None:
     """Keep the first original next to the file, so several edits still restore cleanly."""
-    backup = path.with_name(path.name + BACKUP_SUFFIX)
+    backup = _backup_path(path)
     if path.exists() and not backup.exists():
         shutil.copy2(path, backup)
+
+
+def _original(path: Path) -> bytes:
+    """The content before any demo edit. Edits start from this copy, not from the
+    current file: flipping the same bit twice would otherwise restore the original
+    while the page still reports a tampered file."""
+    _backup(path)
+    return _backup_path(path).read_bytes()
+
+
+def _backup_path(path: Path) -> Path:
+    return path.with_name(path.name + BACKUP_SUFFIX)
 
 
 _TAMPER: dict[str, Callable[[Path, Path, Path], str]] = {
