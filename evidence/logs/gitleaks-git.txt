@@ -1,0 +1,39 @@
+Finding:     Access control has failed.", REDACTED
+Secret:      REDACTED
+RuleID:      generic-api-key
+Entropy:     3.521641
+File:        app/gui/demo_view.py
+Line:        223
+Commit:      5a6c7767d962da7029c6a58a3cf5acb6fb2f9630
+Author:      zhangchao
+Email:       nezhaat78@gmail.com
+Date:        2026-10-17T07:05:09Z
+Fingerprint: 5a6c7767d962da7029c6a58a3cf5acb6fb2f9630:app/gui/demo_view.py:generic-api-key:223
+
+Finding:     wrapped_key, REDACTED
+Secret:      REDACTED
+RuleID:      generic-api-key
+Entropy:     3.523856
+File:        app/gui/demo_view.py
+Line:        212
+Commit:      b574876d0a25991f459fe95c372a1d4d09dec5ee
+Author:      zhangchao
+Email:       nezhaat78@gmail.com
+Date:        2026-10-17T03:57:09Z
+Fingerprint: b574876d0a25991f459fe95c372a1d4d09dec5ee:app/gui/demo_view.py:generic-api-key:212
+
+Finding:     wrapped_key, REDACTED
+Secret:      REDACTED
+RuleID:      generic-api-key
+Entropy:     3.523856
+File:        app/services/owner.py
+Line:        181
+Commit:      62311f71aae7b70e6ed8348152aba975a6880a40
+Author:      zhangchao
+Email:       nezhaat78@gmail.com
+Date:        2026-10-16T12:32:31Z
+Fingerprint: 62311f71aae7b70e6ed8348152aba975a6880a40:app/services/owner.py:generic-api-key:181
+
+12:23PM INF 10 commits scanned.
+12:23PM INF scanned ~1829860 bytes (1.83 MB) in 344ms
+12:23PM WRN leaks found: 3

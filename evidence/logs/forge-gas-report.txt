@@ -1,0 +1,225 @@
+No files changed, compilation skipped
+
+Ran 18 tests for test/Registration.t.sol:RegistrationTest
+[PASS] test_S14_registerKeys_rejectsBadPrefix() (gas: 62350)
+[PASS] test_S14_registerKeys_rejectsWrongLength() (gas: 85765)
+[PASS] test_S16_frontRunWithSameSaltGetsDifferentFileId() (gas: 436164)
+[PASS] test_S5_registerFile_rejectsDuplicateSalt() (gas: 232439)
+[PASS] test_constants() (gas: 10864)
+[PASS] test_getFile_revertsForUnknownFile() (gas: 20732)
+[PASS] test_getRequest_noneForUnknownPair() (gas: 14281)
+[PASS] test_getUserKeys_emptyForUnregisteredUser() (gas: 14555)
+[PASS] test_registerFile_emptyLabelAllowed() (gas: 198332)
+[PASS] test_registerFile_maxLabelAllowed() (gas: 205528)
+[PASS] test_registerFile_rejectsBadOwnerWrappedKeyLength() (gas: 99088)
+[PASS] test_registerFile_rejectsLongLabel() (gas: 45755)
+[PASS] test_registerFile_rejectsZeroHashes() (gas: 71481)
+[PASS] test_registerFile_requiresRegisteredKeys() (gas: 40193)
+[PASS] test_registerFile_storesRecordAndEmits() (gas: 234012)
+[PASS] test_registerKeys_rejectsSameKeyForBothPurposes() (gas: 36634)
+[PASS] test_registerKeys_rotationReplacesKeys() (gas: 79925)
+[PASS] test_registerKeys_storesKeysAndEmits() (gas: 199661)
+Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 2.77ms (1.63ms CPU time)
+
+Ran 30 tests for test/AccessControl.t.sol:AccessControlTest
+[PASS] test_S12_rejectedAndRevokedRequestersHoldNoWrappedKey() (gas: 332844)
+[PASS] test_S1_strangerCannotApprove() (gas: 102316)
+[PASS] test_S2_requesterCannotApproveOwnRequest() (gas: 100337)
+[PASS] test_S3_cannotApproveRejectedRequest() (gas: 130055)
+[PASS] test_S3_cannotApproveTwice() (gas: 222239)
+[PASS] test_S4_requestAccess_ownerCannotRequestOwnFile() (gas: 37108)
+[PASS] test_S4_requestAccess_requiresRegisteredKeys() (gas: 39995)
+[PASS] test_S4_requestAccess_unknownFileReverts() (gas: 35071)
+[PASS] test_approvalIsPerRequester() (gas: 290485)
+[PASS] test_approveAccess_inactiveFileReverts() (gas: 124319)
+[PASS] test_approveAccess_rejectsBadWrappedKeyLength() (gas: 95096)
+[PASS] test_approveAccess_requiresPendingRequest() (gas: 45299)
+[PASS] test_approveAccess_storesWrappedKeyAndEmits() (gas: 209679)
+[PASS] test_approveAccess_unknownFileReverts() (gas: 40407)
+[PASS] test_deactivateFile_blocksNewRequestsAndEmits() (gas: 98238)
+[PASS] test_deactivateFile_onlyOwner() (gas: 55789)
+[PASS] test_deactivateFile_ownerCanStillRejectAndRevoke() (gas: 362662)
+[PASS] test_deactivateFile_revertsWhenAlreadyInactive() (gas: 67013)
+[PASS] test_fullLifecycleUpdatesTimestamps() (gas: 347332)
+[PASS] test_rejectAccess_onlyOwner() (gas: 92131)
+[PASS] test_rejectAccess_requiresPending() (gas: 219395)
+[PASS] test_rejectAccess_setsRejectedAndEmits() (gas: 107983)
+[PASS] test_requestAccess_allowedAgainAfterReject() (gas: 140408)
+[PASS] test_requestAccess_allowedAgainAfterRevoke() (gas: 281088)
+[PASS] test_requestAccess_rejectsDuplicatePending() (gas: 94446)
+[PASS] test_requestAccess_rejectsWhenAlreadyApproved() (gas: 221343)
+[PASS] test_requestAccess_setsPendingAndEmits() (gas: 73627)
+[PASS] test_revokeAccess_deletesWrappedKeyAndEmits() (gas: 248709)
+[PASS] test_revokeAccess_onlyOwner() (gas: 231227)
+[PASS] test_revokeAccess_requiresApproved() (gas: 94414)
+Suite result: ok. 30 passed; 0 failed; 0 skipped; finished in 7.97ms (6.66ms CPU time)
+
+Ran 4 tests for test/invariant/SecureFileShare.invariant.t.sol:SecureFileShareInvariantTest
+[PASS] invariant_callsFollowStateMachine() (runs: 256, calls: 16384, reverts: 0)
+
+╭------------------------+----------------+-------+---------+----------╮
+| Contract               | Selector       | Calls | Reverts | Discards |
++======================================================================+
+| SecureFileShareHandler | approveAccess  | 2769  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | deactivateFile | 2688  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | registerFile   | 2643  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | rejectAccess   | 2772  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | requestAccess  | 2825  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | revokeAccess   | 2687  | 0       | 0        |
+╰------------------------+----------------+-------+---------+----------╯
+
+[PASS] invariant_onlyOwnerChangesRequests() (runs: 256, calls: 16384, reverts: 0)
+
+╭------------------------+----------------+-------+---------+----------╮
+| Contract               | Selector       | Calls | Reverts | Discards |
++======================================================================+
+| SecureFileShareHandler | approveAccess  | 2750  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | deactivateFile | 2783  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | registerFile   | 2775  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | rejectAccess   | 2699  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | requestAccess  | 2709  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | revokeAccess   | 2668  | 0       | 0        |
+╰------------------------+----------------+-------+---------+----------╯
+
+[PASS] invariant_stateMatchesModel() (runs: 256, calls: 16384, reverts: 0)
+
+╭------------------------+----------------+-------+---------+----------╮
+| Contract               | Selector       | Calls | Reverts | Discards |
++======================================================================+
+| SecureFileShareHandler | approveAccess  | 2754  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | deactivateFile | 2740  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | registerFile   | 2775  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | rejectAccess   | 2808  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | requestAccess  | 2663  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | revokeAccess   | 2644  | 0       | 0        |
+╰------------------------+----------------+-------+---------+----------╯
+
+[PASS] invariant_wrappedKeyOnlyWhileApproved() (runs: 256, calls: 16384, reverts: 0)
+
+╭------------------------+----------------+-------+---------+----------╮
+| Contract               | Selector       | Calls | Reverts | Discards |
++======================================================================+
+| SecureFileShareHandler | approveAccess  | 2714  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | deactivateFile | 2764  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | registerFile   | 2767  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | rejectAccess   | 2698  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | requestAccess  | 2711  | 0       | 0        |
+|------------------------+----------------+-------+---------+----------|
+| SecureFileShareHandler | revokeAccess   | 2730  | 0       | 0        |
+╰------------------------+----------------+-------+---------+----------╯
+
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 19.85s (36.01s CPU time)
+
+Ran 7 tests for test/Fuzz.t.sol:FuzzTest
+[PASS] testFuzz_S16_fileIdIsBoundToSender(address,bytes32) (runs: 1000, μ: 573464, ~: 574209)
+[PASS] testFuzz_S1_nonOwnerCannotManageFile(address) (runs: 1000, μ: 517871, ~: 517871)
+[PASS] testFuzz_approveAccess_rejectsWrongWrappedKeyLength(bytes) (runs: 1000, μ: 283456, ~: 283231)
+[PASS] testFuzz_computeFileId_matchesAbiEncode(address,bytes32) (runs: 1000, μ: 6196, ~: 6196)
+[PASS] testFuzz_registerFile_rejectsWrongWrappedKeyLength(bytes) (runs: 1000, μ: 39032, ~: 38795)
+[PASS] testFuzz_registerKeys_acceptsCompressedKeys(bytes32,bytes32,bool,bool) (runs: 1000, μ: 215784, ~: 220040)
+[PASS] testFuzz_registerKeys_rejectsMalformedKey(bytes) (runs: 1000, μ: 62049, ~: 61542)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 19.89s (20.44s CPU time)
+
+╭--------------------------------------------------+-----------------+--------+--------+--------+---------╮
+| src/SecureFileShare.sol:SecureFileShare Contract |                 |        |        |        |         |
++=========================================================================================================+
+| Deployment Cost                                  | Deployment Size |        |        |        |         |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| 1295598                                          | 5773            |        |        |        |         |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+|                                                  |                 |        |        |        |         |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| Function Name                                    | Min             | Avg    | Median | Max    | # Calls |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| MAX_LABEL_LEN                                    | 260             | 260    | 260    | 260    | 2       |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| PUBKEY_LEN                                       | 239             | 239    | 239    | 239    | 1       |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| WRAPPED_KEY_LEN                                  | 238             | 238    | 238    | 238    | 2       |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| approveAccess                                    | 26326           | 31538  | 26528  | 122813 | 10498   |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| computeFileId                                    | 634             | 634    | 634    | 634    | 11254   |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| deactivateFile                                   | 24160           | 25637  | 24376  | 28477  | 10046   |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| getFile                                          | 9746            | 16651  | 16677  | 16677  | 268     |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| getRequest                                       | 5976            | 8893   | 5976   | 12534  | 589     |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| getUserKeys                                      | 6159            | 14938  | 14956  | 14956  | 515     |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| registerFile                                     | 26698           | 124011 | 186571 | 188852 | 12321   |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| registerKeys                                     | 22524           | 104042 | 162277 | 162455 | 1252    |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| rejectAccess                                     | 24700           | 26467  | 27208  | 31554  | 10011   |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| requestAccess                                    | 24161           | 33167  | 24414  | 50773  | 10215   |
+|--------------------------------------------------+-----------------+--------+--------+--------+---------|
+| revokeAccess                                     | 24657           | 26280  | 27168  | 41578  | 9787    |
+╰--------------------------------------------------+-----------------+--------+--------+--------+---------╯
+
+╭---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------╮
+| test/invariant/SecureFileShareHandler.sol:SecureFileShareHandler Contract |                 |        |        |        |         |
++==================================================================================================================================+
+| Deployment Cost                                                           | Deployment Size |        |        |        |         |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| 1994027                                                                   | 6848            |        |        |        |         |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+|                                                                           |                 |        |        |        |         |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| Function Name                                                             | Min             | Avg    | Median | Max    | # Calls |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| actorAt                                                                   | 4650            | 4650   | 4650   | 4650   | 55      |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| actorCount                                                                | 2358            | 2358   | 2358   | 2358   | 66      |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| approveAccess                                                             | 2458            | 52473  | 55628  | 159483 | 11030   |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| deactivateFile                                                            | 2476            | 38833  | 41903  | 51507  | 11023   |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| expectedStatus                                                            | 2755            | 2755   | 2755   | 2755   | 30      |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| fileCount                                                                 | 2325            | 2325   | 2325   | 2325   | 13      |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| fileIdAt                                                                  | 4616            | 4616   | 4616   | 4616   | 11      |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| isActive                                                                  | 2514            | 2514   | 2514   | 2514   | 6       |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| modelMismatches                                                           | 2316            | 2316   | 2316   | 2316   | 1       |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| ownerOf                                                                   | 2486            | 2486   | 2486   | 2486   | 6       |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| registerFile                                                              | 50082           | 189378 | 283843 | 300955 | 10997   |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| rejectAccess                                                              | 2435            | 41753  | 47337  | 57338  | 11015   |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| requestAccess                                                             | 2389            | 52912  | 44024  | 95240  | 10964   |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| revokeAccess                                                              | 2480            | 41502  | 47342  | 67407  | 10763   |
+|---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------|
+| unauthorizedSuccesses                                                     | 2360            | 2360   | 2360   | 2360   | 1       |
+╰---------------------------------------------------------------------------+-----------------+--------+--------+--------+---------╯
+
+
+Ran 4 test suites in 20.48s (39.75s CPU time): 59 tests passed, 0 failed, 0 skipped (59 total tests)

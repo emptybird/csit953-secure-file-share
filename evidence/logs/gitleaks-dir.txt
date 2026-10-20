@@ -1,0 +1,26 @@
+Finding:     wrapped_key, REDACTED
+Secret:      REDACTED
+RuleID:      generic-api-key
+Entropy:     3.523856
+File:        app/gui/demo_view.py
+Line:        216
+Fingerprint: app/gui/demo_view.py:generic-api-key:216
+
+Finding:     Access control has failed.", REDACTED
+Secret:      REDACTED
+RuleID:      generic-api-key
+Entropy:     3.521641
+File:        app/gui/demo_view.py
+Line:        224
+Fingerprint: app/gui/demo_view.py:generic-api-key:224
+
+Finding:     wrapped_key, REDACTED
+Secret:      REDACTED
+RuleID:      generic-api-key
+Entropy:     3.523856
+File:        app/services/owner.py
+Line:        204
+Fingerprint: app/services/owner.py:generic-api-key:204
+
+12:23PM INF scanned ~5736891 bytes (5.74 MB) in 156ms
+12:23PM WRN leaks found: 3

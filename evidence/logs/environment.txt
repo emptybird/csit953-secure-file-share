@@ -1,0 +1,7 @@
+date      2026-10-17
+commit    af4fd76 + uncommitted changes (the 17 Oct review), run on a copy of the working tree
+system    Linux x86_64 (Ubuntu 24.04.5 LTS)
+python    Python 3.12.3 (all tests); Python 3.11.17 (pytest-py311-no-gui.txt)
+packages  cryptography 50.0.2, web3 7.16.0, eth-account 0.14.0, pytest 9.1.1
+forge     forge Version: 1.5.1-stable (solc 0.8.30)
+tools     slither 0.11.6, bandit 1.9.4; gitleaks 8.28.0 ran on the repository itself (Linux arm64)
