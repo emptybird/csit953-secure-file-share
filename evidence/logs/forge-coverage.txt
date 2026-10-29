@@ -1,31 +1,10 @@
 Warning: optimizer settings and `viaIR` have been disabled for accurate coverage reports.
 If you encounter "stack too deep" errors, consider using `--ir-minimum` which enables `viaIR` with minimum optimization resolving most of the errors
 Compiling 26 files with Solc 0.8.30
-Solc 0.8.30 finished in 1.03s
+Solc 0.8.30 finished in 951.21ms
 Compiler run successful!
 Analysing contracts...
 Running tests...
-
-Ran 18 tests for test/Registration.t.sol:RegistrationTest
-[PASS] test_S14_registerKeys_rejectsBadPrefix() (gas: 19108)
-[PASS] test_S14_registerKeys_rejectsWrongLength() (gas: 21277)
-[PASS] test_S16_frontRunWithSameSaltGetsDifferentFileId() (gas: 361991)
-[PASS] test_S5_registerFile_rejectsDuplicateSalt() (gas: 185004)
-[PASS] test_constants() (gas: 6896)
-[PASS] test_getFile_revertsForUnknownFile() (gas: 22961)
-[PASS] test_getRequest_noneForUnknownPair() (gas: 16201)
-[PASS] test_getUserKeys_emptyForUnregisteredUser() (gas: 16236)
-[PASS] test_registerFile_emptyLabelAllowed() (gas: 177266)
-[PASS] test_registerFile_maxLabelAllowed() (gas: 179747)
-[PASS] test_registerFile_rejectsBadOwnerWrappedKeyLength() (gas: 31939)
-[PASS] test_registerFile_rejectsLongLabel() (gas: 18502)
-[PASS] test_registerFile_rejectsZeroHashes() (gas: 26521)
-[PASS] test_registerFile_requiresRegisteredKeys() (gas: 17872)
-[PASS] test_registerFile_storesRecordAndEmits() (gas: 195584)
-[PASS] test_registerKeys_rejectsSameKeyForBothPurposes() (gas: 15754)
-[PASS] test_registerKeys_rotationReplacesKeys() (gas: 47347)
-[PASS] test_registerKeys_storesKeysAndEmits() (gas: 170970)
-Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 9.88ms (8.57ms CPU time)
 
 Ran 30 tests for test/AccessControl.t.sol:AccessControlTest
 [PASS] test_S12_rejectedAndRevokedRequestersHoldNoWrappedKey() (gas: 154052)
@@ -58,7 +37,38 @@ Ran 30 tests for test/AccessControl.t.sol:AccessControlTest
 [PASS] test_revokeAccess_deletesWrappedKeyAndEmits() (gas: 125408)
 [PASS] test_revokeAccess_onlyOwner() (gas: 152370)
 [PASS] test_revokeAccess_requiresApproved() (gas: 49438)
-Suite result: ok. 30 passed; 0 failed; 0 skipped; finished in 16.82ms (15.19ms CPU time)
+Suite result: ok. 30 passed; 0 failed; 0 skipped; finished in 15.07ms (13.49ms CPU time)
+
+Ran 18 tests for test/Registration.t.sol:RegistrationTest
+[PASS] test_S14_registerKeys_rejectsBadPrefix() (gas: 19108)
+[PASS] test_S14_registerKeys_rejectsWrongLength() (gas: 21277)
+[PASS] test_S16_frontRunWithSameSaltGetsDifferentFileId() (gas: 361991)
+[PASS] test_S5_registerFile_rejectsDuplicateSalt() (gas: 185004)
+[PASS] test_constants() (gas: 6896)
+[PASS] test_getFile_revertsForUnknownFile() (gas: 22961)
+[PASS] test_getRequest_noneForUnknownPair() (gas: 16201)
+[PASS] test_getUserKeys_emptyForUnregisteredUser() (gas: 16236)
+[PASS] test_registerFile_emptyLabelAllowed() (gas: 177266)
+[PASS] test_registerFile_maxLabelAllowed() (gas: 179747)
+[PASS] test_registerFile_rejectsBadOwnerWrappedKeyLength() (gas: 31939)
+[PASS] test_registerFile_rejectsLongLabel() (gas: 18502)
+[PASS] test_registerFile_rejectsZeroHashes() (gas: 26521)
+[PASS] test_registerFile_requiresRegisteredKeys() (gas: 17872)
+[PASS] test_registerFile_storesRecordAndEmits() (gas: 195584)
+[PASS] test_registerKeys_rejectsSameKeyForBothPurposes() (gas: 15754)
+[PASS] test_registerKeys_rotationReplacesKeys() (gas: 47347)
+[PASS] test_registerKeys_storesKeysAndEmits() (gas: 170970)
+Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 18.20ms (16.72ms CPU time)
+
+Ran 7 tests for test/Fuzz.t.sol:FuzzTest
+[PASS] testFuzz_S16_fileIdIsBoundToSender(address,bytes32) (runs: 1000, μ: 496174, ~: 496393)
+[PASS] testFuzz_S1_nonOwnerCannotManageFile(address) (runs: 1000, μ: 333593, ~: 333593)
+[PASS] testFuzz_approveAccess_rejectsWrongWrappedKeyLength(bytes) (runs: 1000, μ: 214356, ~: 214355)
+[PASS] testFuzz_computeFileId_matchesAbiEncode(address,bytes32) (runs: 1000, μ: 7867, ~: 7867)
+[PASS] testFuzz_registerFile_rejectsWrongWrappedKeyLength(bytes) (runs: 1000, μ: 16677, ~: 16674)
+[PASS] testFuzz_registerKeys_acceptsCompressedKeys(bytes32,bytes32,bool,bool) (runs: 1000, μ: 164707, ~: 168607)
+[PASS] testFuzz_registerKeys_rejectsMalformedKey(bytes) (runs: 1000, μ: 18734, ~: 18728)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 1.04s (1.75s CPU time)
 
 Ran 4 tests for test/invariant/SecureFileShare.invariant.t.sol:SecureFileShareInvariantTest
 [PASS] invariant_callsFollowStateMachine() (runs: 256, calls: 16384, reverts: 0)
@@ -133,19 +143,9 @@ Ran 4 tests for test/invariant/SecureFileShare.invariant.t.sol:SecureFileShareIn
 | SecureFileShareHandler | revokeAccess   | 2705  | 0       | 0        |
 ╰------------------------+----------------+-------+---------+----------╯
 
-Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 32.60s (61.07s CPU time)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 28.32s (53.26s CPU time)
 
-Ran 7 tests for test/Fuzz.t.sol:FuzzTest
-[PASS] testFuzz_S16_fileIdIsBoundToSender(address,bytes32) (runs: 1000, μ: 496174, ~: 496393)
-[PASS] testFuzz_S1_nonOwnerCannotManageFile(address) (runs: 1000, μ: 333593, ~: 333593)
-[PASS] testFuzz_approveAccess_rejectsWrongWrappedKeyLength(bytes) (runs: 1000, μ: 214356, ~: 214355)
-[PASS] testFuzz_computeFileId_matchesAbiEncode(address,bytes32) (runs: 1000, μ: 7867, ~: 7867)
-[PASS] testFuzz_registerFile_rejectsWrongWrappedKeyLength(bytes) (runs: 1000, μ: 16677, ~: 16674)
-[PASS] testFuzz_registerKeys_acceptsCompressedKeys(bytes32,bytes32,bool,bool) (runs: 1000, μ: 164707, ~: 168607)
-[PASS] testFuzz_registerKeys_rejectsMalformedKey(bytes) (runs: 1000, μ: 18734, ~: 18728)
-Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 32.68s (33.43s CPU time)
-
-Ran 4 test suites in 32.69s (65.30s CPU time): 59 tests passed, 0 failed, 0 skipped (59 total tests)
+Ran 4 test suites in 28.34s (29.40s CPU time): 59 tests passed, 0 failed, 0 skipped (59 total tests)
 
 ╭-------------------------+-----------------+-----------------+-----------------+-----------------╮
 | File                    | % Lines         | % Statements    | % Branches      | % Funcs         |

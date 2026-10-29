@@ -2,7 +2,7 @@
 [main]	INFO	profile exclude tests: None
 [main]	INFO	cli include tests: None
 [main]	INFO	cli exclude tests: None
-[main]	INFO	running on Python 3.13.16
+[main]	INFO	running on Python 3.12.3
 [manager]	WARNING	Test in comment: only is not a test name or id, ignoring
 [manager]	WARNING	Test in comment: to is not a test name or id, ignoring
 [manager]	WARNING	Test in comment: show is not a test name or id, ignoring
@@ -25,7 +25,7 @@
 [tester]	WARNING	nosec encountered (B603), but no failed test on file app/gui/verify_view.py:385
 [tester]	WARNING	nosec encountered (B607), but no failed test on file app/gui/verify_view.py:387
 [tester]	WARNING	nosec encountered (B603), but no failed test on file app/gui/verify_view.py:387
-Run started:2026-10-17 12:12:54.512205+00:00
+Run started:2026-10-25 07:39:08.908957+00:00
 
 Test results:
 >> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.

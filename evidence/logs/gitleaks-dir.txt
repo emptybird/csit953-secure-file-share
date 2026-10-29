@@ -22,5 +22,5 @@ File:        app/services/owner.py
 Line:        204
 Fingerprint: app/services/owner.py:generic-api-key:204
 
-12:23PM INF scanned ~5736891 bytes (5.74 MB) in 156ms
-12:23PM WRN leaks found: 3
+7:41AM INF scanned ~5841128 bytes (5.84 MB) in 205ms
+7:41AM WRN leaks found: 3

@@ -1,5 +1,26 @@
 No files changed, compilation skipped
 
+Ran 18 tests for test/Registration.t.sol:RegistrationTest
+[PASS] test_S14_registerKeys_rejectsBadPrefix() (gas: 16506)
+[PASS] test_S14_registerKeys_rejectsWrongLength() (gas: 17937)
+[PASS] test_S16_frontRunWithSameSaltGetsDifferentFileId() (gas: 349800)
+[PASS] test_S5_registerFile_rejectsDuplicateSalt() (gas: 178575)
+[PASS] test_constants() (gas: 6364)
+[PASS] test_getFile_revertsForUnknownFile() (gas: 20732)
+[PASS] test_getRequest_noneForUnknownPair() (gas: 14281)
+[PASS] test_getUserKeys_emptyForUnregisteredUser() (gas: 14555)
+[PASS] test_registerFile_emptyLabelAllowed() (gas: 173684)
+[PASS] test_registerFile_maxLabelAllowed() (gas: 175856)
+[PASS] test_registerFile_rejectsBadOwnerWrappedKeyLength() (gas: 28012)
+[PASS] test_registerFile_rejectsLongLabel() (gas: 15955)
+[PASS] test_registerFile_rejectsZeroHashes() (gas: 22385)
+[PASS] test_registerFile_requiresRegisteredKeys() (gas: 15261)
+[PASS] test_registerFile_storesRecordAndEmits() (gas: 186080)
+[PASS] test_registerKeys_rejectsSameKeyForBothPurposes() (gas: 13706)
+[PASS] test_registerKeys_rotationReplacesKeys() (gas: 42497)
+[PASS] test_registerKeys_storesKeysAndEmits() (gas: 162233)
+Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 1.68ms (930.64µs CPU time)
+
 Ran 30 tests for test/AccessControl.t.sol:AccessControlTest
 [PASS] test_S12_rejectedAndRevokedRequestersHoldNoWrappedKey() (gas: 144962)
 [PASS] test_S1_strangerCannotApprove() (gas: 53028)
@@ -31,38 +52,17 @@ Ran 30 tests for test/AccessControl.t.sol:AccessControlTest
 [PASS] test_revokeAccess_deletesWrappedKeyAndEmits() (gas: 117910)
 [PASS] test_revokeAccess_onlyOwner() (gas: 145183)
 [PASS] test_revokeAccess_requiresApproved() (gas: 46894)
-Suite result: ok. 30 passed; 0 failed; 0 skipped; finished in 11.15ms (4.80ms CPU time)
-
-Ran 18 tests for test/Registration.t.sol:RegistrationTest
-[PASS] test_S14_registerKeys_rejectsBadPrefix() (gas: 16506)
-[PASS] test_S14_registerKeys_rejectsWrongLength() (gas: 17937)
-[PASS] test_S16_frontRunWithSameSaltGetsDifferentFileId() (gas: 349800)
-[PASS] test_S5_registerFile_rejectsDuplicateSalt() (gas: 178575)
-[PASS] test_constants() (gas: 6364)
-[PASS] test_getFile_revertsForUnknownFile() (gas: 20732)
-[PASS] test_getRequest_noneForUnknownPair() (gas: 14281)
-[PASS] test_getUserKeys_emptyForUnregisteredUser() (gas: 14555)
-[PASS] test_registerFile_emptyLabelAllowed() (gas: 173684)
-[PASS] test_registerFile_maxLabelAllowed() (gas: 175856)
-[PASS] test_registerFile_rejectsBadOwnerWrappedKeyLength() (gas: 28012)
-[PASS] test_registerFile_rejectsLongLabel() (gas: 15955)
-[PASS] test_registerFile_rejectsZeroHashes() (gas: 22385)
-[PASS] test_registerFile_requiresRegisteredKeys() (gas: 15261)
-[PASS] test_registerFile_storesRecordAndEmits() (gas: 186080)
-[PASS] test_registerKeys_rejectsSameKeyForBothPurposes() (gas: 13706)
-[PASS] test_registerKeys_rotationReplacesKeys() (gas: 42497)
-[PASS] test_registerKeys_storesKeysAndEmits() (gas: 162233)
-Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 12.39ms (5.94ms CPU time)
+Suite result: ok. 30 passed; 0 failed; 0 skipped; finished in 6.88ms (1.90ms CPU time)
 
 Ran 7 tests for test/Fuzz.t.sol:FuzzTest
-[PASS] testFuzz_S16_fileIdIsBoundToSender(address,bytes32) (runs: 1000, μ: 483126, ~: 483405)
+[PASS] testFuzz_S16_fileIdIsBoundToSender(address,bytes32) (runs: 1000, μ: 483225, ~: 483405)
 [PASS] testFuzz_S1_nonOwnerCannotManageFile(address) (runs: 1000, μ: 316663, ~: 316663)
 [PASS] testFuzz_approveAccess_rejectsWrongWrappedKeyLength(bytes) (runs: 1000, μ: 208168, ~: 208167)
 [PASS] testFuzz_computeFileId_matchesAbiEncode(address,bytes32) (runs: 1000, μ: 6196, ~: 6196)
 [PASS] testFuzz_registerFile_rejectsWrongWrappedKeyLength(bytes) (runs: 1000, μ: 15028, ~: 15025)
-[PASS] testFuzz_registerKeys_acceptsCompressedKeys(bytes32,bytes32,bool,bool) (runs: 1000, μ: 157491, ~: 161691)
-[PASS] testFuzz_registerKeys_rejectsMalformedKey(bytes) (runs: 1000, μ: 16348, ~: 16341)
-Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 894.96ms (1.49s CPU time)
+[PASS] testFuzz_registerKeys_acceptsCompressedKeys(bytes32,bytes32,bool,bool) (runs: 1000, μ: 157691, ~: 161691)
+[PASS] testFuzz_registerKeys_rejectsMalformedKey(bytes) (runs: 1000, μ: 16345, ~: 16341)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 629.78ms (1.05s CPU time)
 
 Ran 4 tests for test/invariant/SecureFileShare.invariant.t.sol:SecureFileShareInvariantTest
 [PASS] invariant_callsFollowStateMachine() (runs: 256, calls: 16384, reverts: 0)
@@ -70,17 +70,17 @@ Ran 4 tests for test/invariant/SecureFileShare.invariant.t.sol:SecureFileShareIn
 ╭------------------------+----------------+-------+---------+----------╮
 | Contract               | Selector       | Calls | Reverts | Discards |
 +======================================================================+
-| SecureFileShareHandler | approveAccess  | 2789  | 0       | 0        |
+| SecureFileShareHandler | approveAccess  | 2712  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | deactivateFile | 2746  | 0       | 0        |
+| SecureFileShareHandler | deactivateFile | 2686  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | registerFile   | 2718  | 0       | 0        |
+| SecureFileShareHandler | registerFile   | 2768  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | rejectAccess   | 2654  | 0       | 0        |
+| SecureFileShareHandler | rejectAccess   | 2776  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | requestAccess  | 2750  | 0       | 0        |
+| SecureFileShareHandler | requestAccess  | 2732  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | revokeAccess   | 2727  | 0       | 0        |
+| SecureFileShareHandler | revokeAccess   | 2710  | 0       | 0        |
 ╰------------------------+----------------+-------+---------+----------╯
 
 [PASS] invariant_onlyOwnerChangesRequests() (runs: 256, calls: 16384, reverts: 0)
@@ -88,17 +88,17 @@ Ran 4 tests for test/invariant/SecureFileShare.invariant.t.sol:SecureFileShareIn
 ╭------------------------+----------------+-------+---------+----------╮
 | Contract               | Selector       | Calls | Reverts | Discards |
 +======================================================================+
-| SecureFileShareHandler | approveAccess  | 2761  | 0       | 0        |
+| SecureFileShareHandler | approveAccess  | 2834  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | deactivateFile | 2768  | 0       | 0        |
+| SecureFileShareHandler | deactivateFile | 2724  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | registerFile   | 2684  | 0       | 0        |
+| SecureFileShareHandler | registerFile   | 2671  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | rejectAccess   | 2687  | 0       | 0        |
+| SecureFileShareHandler | rejectAccess   | 2703  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | requestAccess  | 2666  | 0       | 0        |
+| SecureFileShareHandler | requestAccess  | 2724  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | revokeAccess   | 2818  | 0       | 0        |
+| SecureFileShareHandler | revokeAccess   | 2728  | 0       | 0        |
 ╰------------------------+----------------+-------+---------+----------╯
 
 [PASS] invariant_stateMatchesModel() (runs: 256, calls: 16384, reverts: 0)
@@ -106,17 +106,17 @@ Ran 4 tests for test/invariant/SecureFileShare.invariant.t.sol:SecureFileShareIn
 ╭------------------------+----------------+-------+---------+----------╮
 | Contract               | Selector       | Calls | Reverts | Discards |
 +======================================================================+
-| SecureFileShareHandler | approveAccess  | 2758  | 0       | 0        |
+| SecureFileShareHandler | approveAccess  | 2839  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | deactivateFile | 2730  | 0       | 0        |
+| SecureFileShareHandler | deactivateFile | 2655  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | registerFile   | 2688  | 0       | 0        |
+| SecureFileShareHandler | registerFile   | 2711  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | rejectAccess   | 2682  | 0       | 0        |
+| SecureFileShareHandler | rejectAccess   | 2758  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | requestAccess  | 2831  | 0       | 0        |
+| SecureFileShareHandler | requestAccess  | 2692  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | revokeAccess   | 2695  | 0       | 0        |
+| SecureFileShareHandler | revokeAccess   | 2729  | 0       | 0        |
 ╰------------------------+----------------+-------+---------+----------╯
 
 [PASS] invariant_wrappedKeyOnlyWhileApproved() (runs: 256, calls: 16384, reverts: 0)
@@ -124,19 +124,19 @@ Ran 4 tests for test/invariant/SecureFileShare.invariant.t.sol:SecureFileShareIn
 ╭------------------------+----------------+-------+---------+----------╮
 | Contract               | Selector       | Calls | Reverts | Discards |
 +======================================================================+
-| SecureFileShareHandler | approveAccess  | 2731  | 0       | 0        |
+| SecureFileShareHandler | approveAccess  | 2732  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | deactivateFile | 2696  | 0       | 0        |
+| SecureFileShareHandler | deactivateFile | 2673  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | registerFile   | 2772  | 0       | 0        |
+| SecureFileShareHandler | registerFile   | 2751  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | rejectAccess   | 2733  | 0       | 0        |
+| SecureFileShareHandler | rejectAccess   | 2785  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | requestAccess  | 2637  | 0       | 0        |
+| SecureFileShareHandler | requestAccess  | 2752  | 0       | 0        |
 |------------------------+----------------+-------+---------+----------|
-| SecureFileShareHandler | revokeAccess   | 2815  | 0       | 0        |
+| SecureFileShareHandler | revokeAccess   | 2691  | 0       | 0        |
 ╰------------------------+----------------+-------+---------+----------╯
 
-Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 27.54s (43.21s CPU time)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 23.75s (35.63s CPU time)
 
-Ran 4 test suites in 27.56s (28.46s CPU time): 59 tests passed, 0 failed, 0 skipped (59 total tests)
+Ran 4 test suites in 23.76s (24.39s CPU time): 59 tests passed, 0 failed, 0 skipped (59 total tests)

@@ -1,6 +1,6 @@
 ============================= test session starts ==============================
-platform linux -- Python 3.11.17, pytest-9.1.1, pluggy-1.7.0 -- /home/claude/review/venv311/bin/python
-rootdir: /home/claude/evidence-run/assignment
+platform linux -- Python 3.11.17, pytest-9.1.1, pluggy-1.7.0 -- /home/claude/ev/venv311/bin/python
+rootdir: /home/claude/ev/sfs
 configfile: pyproject.toml
 testpaths: tests
 collecting ... collected 396 items
@@ -402,4 +402,4 @@ tests/unit/test_verification.py::TestSavePlaintext::test_refuses_an_unverified_f
 tests/unit/test_verification.py::TestSavePlaintext::test_windows_unsafe_characters_are_replaced PASSED [ 99%]
 tests/unit/test_verification.py::TestSavePlaintext::test_missing_directory PASSED [100%]
 
-============================= 396 passed in 12.74s =============================
+============================= 396 passed in 11.17s =============================

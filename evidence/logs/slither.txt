@@ -1,6 +1,6 @@
-'forge clean' running (wd: /home/claude/evidence-run/assignment/contracts)
+'forge clean' running (wd: /home/claude/ev/sfs/contracts)
 'forge config --json' running
-'forge build --build-info --deny never --skip ./test/** ./script/** --force' running (wd: /home/claude/evidence-run/assignment/contracts)
+'forge build --build-info --deny never --skip ./test/** ./script/** --force' running (wd: /home/claude/ev/sfs/contracts)
 INFO:Detectors:
 Detector: timestamp
 SecureFileShare.getFile(bytes32) (src/SecureFileShare.sol#204-208) uses timestamp for comparisons
