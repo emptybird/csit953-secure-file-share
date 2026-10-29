@@ -1,3 +1,5 @@
+"""ECIES DEK wrapping: round trip, recipient and file binding, tamper resistance."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -44,13 +46,13 @@ class TestRoundTrip:
         assert dek not in wrapped
 
 
-class TestFollowsDesign:
-    def test_raw_primitives_unwrap_per_design_6_1(
+class TestWireFormat:
+    def test_unwraps_with_raw_primitives(
         self, dek: bytes, bob: UserKeys, ctx: FileContext, wrapped: bytes
     ) -> None:
-        """Rebuild the KEK from the DESIGN.md 6.1 formula with raw primitives. The recipient
-        is bound twice (HKDF info and AAD), so dropping one copy still passes every behaviour
-        test; only a check against the specified layout catches it."""
+        """Rebuild the KEK by hand from the layout in app.crypto.ecies. The recipient is
+        bound twice (HKDF info and AAD), so dropping one copy still passes every behaviour
+        test; only an independent rebuild catches it."""
         ephemeral_pub, nonce, sealed = wrapped[:33], wrapped[33:45], wrapped[45:]
         ephemeral = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), ephemeral_pub)
         shared = bob.enc_key.exchange(ec.ECDH(), ephemeral)
@@ -67,7 +69,7 @@ class TestFollowsDesign:
 
 
 class TestOnlyTheRecipient:
-    def test_S10_other_users_key_fails(
+    def test_other_users_key_fails(
         self, mallory: UserKeys, bob: UserKeys, ctx: FileContext, wrapped: bytes
     ) -> None:
         """Mallory reads Bob's wrappedKey from the chain; her own key cannot open it."""
@@ -87,7 +89,7 @@ class TestBinding:
         [{"file_id": b"\x44" * 32}, {"chain_id": 11155111}, {"contract": "0x" + "55" * 20}],
         ids=["other-file", "other-chain", "other-contract"],
     )
-    def test_S11_wrapped_key_cannot_move_to_another_file(
+    def test_wrapped_key_cannot_move_to_another_file(
         self, bob: UserKeys, ctx: FileContext, wrapped: bytes, change: dict
     ) -> None:
         with pytest.raises(KeyUnwrapError):

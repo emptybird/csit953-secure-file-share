@@ -1,9 +1,9 @@
-"""Confirmation dialog for actions that send a transaction (DESIGN.md 8).
+"""Confirmation dialog for actions that send a transaction.
 
-The dialog shows exactly what is about to be signed: which file, which account
-and, for an approval, the fingerprint of the key the file key will be
-encrypted to (W3: the signing screen is a security boundary). No button has
-focus when it opens, so a stray Enter confirms nothing; Escape cancels.
+Shows exactly what is about to be signed: the file, the account and, for an
+approval, the fingerprint of the key the DEK will be wrapped to. The signing
+screen is a security boundary. No button has focus on open, so a stray Enter
+confirms nothing; Escape cancels.
 """
 
 from __future__ import annotations
@@ -18,6 +18,8 @@ from app.gui.widgets import Button, hline, label
 
 @dataclass(frozen=True)
 class DialogField:
+    """One label/value row; `mono` for ids and hashes, `emphasis` for the key fact."""
+
     label: str
     value: str
     mono: bool = False
@@ -77,6 +79,7 @@ def confirm(
     dialog.bind("<Escape>", lambda _e: close(False))
     dialog.protocol("WM_DELETE_WINDOW", lambda: close(False))
 
+    # Centre over the parent, a third of the way down, then go modal.
     dialog.update_idletasks()
     x = window.winfo_rootx() + (window.winfo_width() - dialog.winfo_reqwidth()) // 2
     y = window.winfo_rooty() + (window.winfo_height() - dialog.winfo_reqheight()) // 3

@@ -1,18 +1,18 @@
-"""Main window (DESIGN.md 8): the login page, then a sidebar with one page per task.
+"""Main window: the login page, then a sidebar with one page per task.
 
-    My files        owner: requests for my files, approve / reject / revoke
+    My files        owner: incoming requests, approve / reject / revoke
     Protect a file  owner: encrypt, sign, upload, register
     Browse files    requester: request access, see the status
-    Retrieve        requester: authorized key, V1–V6, key recovery, decryption
+    Retrieve        requester: authorized key, V1-V6, key recovery, decryption
     Activity        the contract's events, CSV export
     Account         keys, network, balance
     Security demo   tampering and unauthorized calls (SFS_DEMO=1 only)
 
 The window polls the chain for new events (every 3 s on the local chain, once a
-block elsewhere), tells each page, and raises a toast when a request for one of
-my files arrives or my own request is decided. Transactions go through
-`run_transaction`: one at a time, each with a toast that shows the tx hash
-while pending and the block and gas once confirmed.
+block elsewhere), passes them to each page, and raises a toast when someone
+requests one of the user's files or decides on one of the user's requests.
+Transactions go through `run_transaction`: one at a time, each with a toast that
+shows the tx hash while pending and the block and gas once confirmed.
 """
 
 from __future__ import annotations
@@ -62,14 +62,15 @@ ICON_FILE = Path(__file__).with_name("assets") / "app-icon.png"
 WINDOW_SIZE = (1280, 820)
 WINDOW_MIN_SIZE = (1080, 700)
 SCREEN_MARGIN = (40, 80)
-LOCAL_CHAIN_ID = 31337
+LOCAL_CHAIN_ID = 31337  # Anvil
 LOCAL_POLL_MS = 3_000
 REMOTE_POLL_MS = 12_000  # one Sepolia block; keeps a rate-limited public RPC happy
-SLOW_TX_SECONDS = 120
-FUND_WEI = 100 * 10**18
+SLOW_TX_SECONDS = 120  # after this the pending toast says confirmation is slow
+FUND_WEI = 100 * 10**18  # "Add test ETH" on Anvil
 # Tk before 8.6.13 can ignore mouse clicks on macOS 14+ (python/cpython#110218).
 MIN_MAC_TK = (8, 6, 13)
 
+# (page key, label, icon)
 NAVIGATION = [
     ("files", "My files", "files"),
     ("protect", "Protect a file", "shield"),
@@ -78,6 +79,7 @@ NAVIGATION = [
     ("account", "Account", "key"),
 ]
 DEMO_NAVIGATION = ("demo", "Security demo", "flask")
+# Owner decisions on the user's own requests: toast title, message
 _DECISIONS = {
     "AccessApproved": ("Access approved", "{name} is ready to retrieve and verify."),
     "AccessRejected": ("Request rejected", "The owner of {name} rejected your request. You may request access again."),
@@ -87,6 +89,8 @@ _DECISIONS = {
 
 @dataclass
 class _PendingTx:
+    """The one transaction in flight and its toast."""
+
     action: str
     done: str
     started: float
@@ -95,6 +99,8 @@ class _PendingTx:
 
 
 class SecureFileShareApp(tk.Tk):
+    """Root window; implements Host and LoginHost for the pages."""
+
     def __init__(self, *, network: str | None = None, alias: str | None = None, demo: bool = False) -> None:
         super().__init__()
         theme.init(self)
@@ -159,7 +165,7 @@ class SecureFileShareApp(tk.Tk):
         return self._account
 
     def notify(self, message: str, level: Level = Level.INFO, *, title: str = "", action: Action | None = None) -> None:
-        timeout = None if level is Level.ERROR else 6000
+        timeout = None if level is Level.ERROR else 6000  # errors stay until dismissed
         self.toasts.show(level, title or message, message if title else "", action=action, timeout_ms=timeout)
 
     def copy_to_clipboard(self, text: str, what: str) -> None:
@@ -190,6 +196,7 @@ class SecureFileShareApp(tk.Tk):
         session = self._session
         if session is None:
             return
+        # Fetch in the background; drop the result if the session changed meanwhile.
         self.worker.submit(
             lambda: AccountService(session).info(),
             lambda fresh: self.account_changed(fresh) if session is self._session else None,
@@ -198,6 +205,7 @@ class SecureFileShareApp(tk.Tk):
         )
 
     def register_keys(self, *, rotate: bool = False) -> None:
+        """registerKeys as a transaction; a rotation needs explicit confirmation first."""
         session, info = self.session, self._account
         if (
             rotate
@@ -276,6 +284,7 @@ class SecureFileShareApp(tk.Tk):
     # ------------------------------------------------------ login / logout
 
     def attach_session(self, session: Session, alias: str, config: AppConfig) -> None:
+        """Replace the login page with the main shell for an unlocked session."""
         self._session, self._alias, self._config = session, alias, config
         self._seen_events = None
         self.title(f"{WINDOW_TITLE} ({alias}, {config.network.name})")
@@ -290,6 +299,7 @@ class SecureFileShareApp(tk.Tk):
         self._schedule_poll()
 
     def logout(self) -> None:
+        """Drop the session and the unlocked keys with it; back to the login page."""
         if self._tx is not None:
             self.notify("A transaction is still pending.", Level.WARNING, title="Cannot lock")
             return
@@ -317,6 +327,7 @@ class SecureFileShareApp(tk.Tk):
         self._tick(pending)
 
     def _tick(self, pending: _PendingTx) -> None:
+        """Refresh the pending toast every second until the receipt arrives."""
         if self._tx is not pending:
             return
         elapsed = int(time.monotonic() - pending.started)
@@ -328,6 +339,7 @@ class SecureFileShareApp(tk.Tk):
 
     def _tx_finished(self, pending: _PendingTx, result: T, on_success: Callable[[T], None]) -> None:
         self._tx = None
+        # A job returns a receipt or a result that carries one (e.g. ProtectedFile).
         receipt = result if isinstance(result, TxReceipt) else getattr(result, "receipt", None)
         if isinstance(receipt, TxReceipt):
             pending.toast.update_toast(
@@ -384,7 +396,7 @@ class SecureFileShareApp(tk.Tk):
         session = self._session
         if session is None or self._shell is None:
             return
-        if self._polling:
+        if self._polling:  # previous refresh still running: skip this tick
             self._schedule_poll()
             return
         self._polling = True
@@ -396,6 +408,7 @@ class SecureFileShareApp(tk.Tk):
         )
 
     def _polled(self, session: Session) -> None:
+        """Hand new events to the pages and announce those that concern the user."""
         self._polling = False
         if session is not self._session or self._shell is None:
             return
@@ -415,6 +428,7 @@ class SecureFileShareApp(tk.Tk):
         self._schedule_poll()
 
     def _poll_error(self, session: Session, exc: BaseException) -> None:
+        """Warn once per outage; the next successful poll announces the recovery."""
         self._polling = False
         if session is not self._session:
             return
@@ -424,7 +438,8 @@ class SecureFileShareApp(tk.Tk):
         self._schedule_poll()
 
     def _announce(self, session: Session, events: Sequence[ChainEvent]) -> None:
-        """Toasts for what other people did to me: a new request, or a decision on mine."""
+        """Toasts for what others did: a request for the user's file, or a decision on
+        the user's request."""
         me = session.address
         files = {e.file_id: e for e in session.events.events if e.name == "FileRegistered"}
         for event in events:
@@ -454,6 +469,7 @@ class SecureFileShareApp(tk.Tk):
     # ---------------------------------------------------------------- window
 
     def _place_window(self) -> None:
+        """Default size clamped to the screen; centred, a third of the way down."""
         width = min(px(WINDOW_SIZE[0]), self.winfo_screenwidth() - SCREEN_MARGIN[0])
         height = min(px(WINDOW_SIZE[1]), self.winfo_screenheight() - SCREEN_MARGIN[1])
         left = max((self.winfo_screenwidth() - width) // 2, 0)
@@ -461,6 +477,7 @@ class SecureFileShareApp(tk.Tk):
         self.geometry(f"{width}x{height}+{left}+{top}")
 
     def _close(self) -> None:
+        """Ask before quitting with a transaction in flight."""
         if self._tx is not None and not messagebox.askokcancel(
             "Transaction pending",
             f"“{self._tx.action}” is not yet confirmed. It may still be mined after you quit, "
@@ -522,6 +539,7 @@ class _Shell(tk.Frame):
             # neither page on screen (see redraw.py).
             page.update_idletasks()
             previous.grid_remove()
+        # Retrieve has no navigation item; it lives under Browse.
         self.sidebar.set_active("browse" if key == "verify" else key)
         page.on_show(**options)
         self._app.toasts.layout()
@@ -537,6 +555,7 @@ class _Shell(tk.Frame):
             page.on_busy_changed()
 
     def show_account(self, info: AccountInfo) -> None:
+        """Sidebar balance plus at most one banner, most urgent first: balance, then keys."""
         self.sidebar.show_account(info)
         app = self._app
         if is_low_balance(info.balance_wei):
@@ -574,17 +593,18 @@ def _app_icon(root: tk.Tk) -> tk.PhotoImage | None:
 
 
 def _old_tk_warning(root: tk.Tk) -> str | None:
+    """Warning text for a macOS Tk older than MIN_MAC_TK, else None."""
     if sys.platform != "darwin":
         return None
     patchlevel = str(root.tk.call("info", "patchlevel"))
     version = tuple(int(part) for part in re.findall(r"\d+", patchlevel)[:3])
     if version >= MIN_MAC_TK:
         return None
-    return f"Tk {patchlevel} may not respond to clicks on this macOS. Run the app from the 953-a2 conda environment."
+    return f"Tk {patchlevel} may not respond to clicks on this macOS. Run the app from the secure-file-share conda environment."
 
 
 def enable_dpi_awareness() -> None:
-    """Sharp text on high-DPI Windows screens (DESIGN.md 8.1); a no-op elsewhere."""
+    """Sharp text on high-DPI Windows screens; a no-op elsewhere."""
     if sys.platform != "win32":
         return
     try:

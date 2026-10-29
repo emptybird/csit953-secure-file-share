@@ -1,5 +1,5 @@
-"""Login page (DESIGN.md 4.1, 8): choose a network and a keystore, then unlock it,
-or create a new keystore with three fresh keys.
+"""Login page: choose a network and a keystore, then unlock it, or create a new
+keystore with three fresh keys.
 
 scrypt (n = 2^17) and the RPC calls run on the worker, so the window stays
 responsive. A wrong password and a damaged keystore give the same message.
@@ -32,10 +32,12 @@ from app.gui.worker import describe_error
 from app.services.account import Session, open_session
 
 FORM_WIDTH = 380
-_NETWORK_NAMES = {"local": "Local chain (Anvil)", "sepolia": "Sepolia testnet"}
+_NETWORK_NAMES = {"local": "Local chain (Anvil)", "sepolia": "Sepolia testnet"}  # .env suffix -> label
 
 
 class LoginView(tk.Frame):
+    """Unlock or create a keystore, connect, then hand the session to the host."""
+
     def __init__(self, parent: tk.Misc, host: LoginHost, *, network: str | None, alias: str | None) -> None:
         super().__init__(parent, background=PAPER)
         self._host = host
@@ -70,6 +72,7 @@ class LoginView(tk.Frame):
         self._network_note = label(self._form, "", style="small", colour=INK_3, wrap=FORM_WIDTH)
         self._network_note.grid(row=2, column=0, sticky="w", pady=(px(5), 0))
 
+        # Unlock and create share one slot in the form; _show swaps them.
         self._unlock_page = self._build_unlock(self._form)
         self._create_page = self._build_create(self._form)
         self._error = label(self._form, "", style="small", colour=RED, wrap=FORM_WIDTH)
@@ -145,6 +148,7 @@ class LoginView(tk.Frame):
         self._describe_network()
 
     def _describe_network(self) -> None:
+        """Note under the select: host, chain and contract, or what is wrong with the file."""
         name = self._network.get()
         if not name:
             text = (
@@ -168,6 +172,7 @@ class LoginView(tk.Frame):
     # ------------------------------------------------------------ actions
 
     def _unlock(self) -> None:
+        """Decrypt the keystore and connect on the worker (scrypt takes a moment)."""
         network, alias, password = self._network.get(), self._alias.get(), self._password.get()
         if not network or not alias:
             self._fail("Select a network and a keystore.")
@@ -193,6 +198,7 @@ class LoginView(tk.Frame):
         )
 
     def _create_keystore(self) -> None:
+        """Validate the form, generate three keys, save them encrypted, then connect."""
         network, alias = self._network.get(), self._new_alias.get().strip()
         password, again = self._new_password.get(), self._new_confirm.get()
         try:
@@ -246,7 +252,7 @@ class LoginView(tk.Frame):
 
     def _connected(self, alias: str, config: AppConfig, session: Session) -> None:
         self.configure(cursor="")
-        for field in (self._password, self._new_password, self._new_confirm):
+        for field in (self._password, self._new_password, self._new_confirm):  # no passwords left in widgets
             field.clear()
         self._host.attach_session(session, alias, config)
 
@@ -256,4 +262,5 @@ def _connect(config: AppConfig, keys: UserKeys) -> Session:
 
 
 def keystore_aliases(directory: Path) -> list[str]:
+    """Keystore names in `directory`; dotfiles (temp files of an interrupted save) are skipped."""
     return sorted(path.stem for path in directory.glob("*.json") if not path.name.startswith("."))

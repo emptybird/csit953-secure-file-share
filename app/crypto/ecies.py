@@ -1,4 +1,4 @@
-"""ECIES wrapping of a file's DEK for one recipient (DESIGN.md 6.1).
+"""ECIES wrapping of a file's DEK for one recipient.
 
     E          = e*G for a fresh ephemeral scalar e                   (33-byte compressed)
     Z          = x-coordinate of e*encPub_R                            (ECDH, 32 bytes)
@@ -8,9 +8,9 @@
     C          = AES-256-GCM(KEK, n, DEK, AAD = fileId | recipient)   # 32 + 16 bytes
     wrappedKey = E | n | C                                             # 33 + 12 + 48 = 93 bytes
 
-Only the holder of the recipient's encryption key can compute Z. The file and
-the recipient are bound into both the KEK and the AAD, so a wrapped key copied
-to another file or handed to another person does not open.
+Only the recipient's encryption key yields Z. File and recipient are bound into
+both the KEK and the AAD, so a wrapped key moved to another file or recipient
+does not open.
 """
 
 from __future__ import annotations
@@ -37,13 +37,12 @@ from app.crypto.encoding import (
 
 INFO_TAG = b"SFS-keywrap-v1"
 KEK_LEN = 32
-WRAPPED_KEY_LEN = PUBLIC_KEY_LEN + NONCE_LEN + DEK_LEN + TAG_LEN  # 93, SecureFileShare.WRAPPED_KEY_LEN
+WRAPPED_KEY_LEN = PUBLIC_KEY_LEN + NONCE_LEN + DEK_LEN + TAG_LEN  # 93; must match SecureFileShare.WRAPPED_KEY_LEN
 
 
 def wrap_key(dek: bytes, recipient_enc_key: bytes, ctx: FileContext, recipient: str) -> bytes:
-    """Encrypt `dek` so that only the owner of `recipient_enc_key` (the encPubKey
-    registered on-chain for `recipient`) can recover it.
-    Raises InvalidKeyError if that public key is not a valid point."""
+    """Wrap `dek` for the holder of `recipient_enc_key` (the recipient's on-chain encPubKey).
+    Raises InvalidKeyError if that key is not a valid point."""
     check_dek(dek)
     recipient_key = load_public_key(recipient_enc_key)
     ephemeral = generate_private_key()
@@ -55,7 +54,8 @@ def wrap_key(dek: bytes, recipient_enc_key: bytes, ctx: FileContext, recipient: 
 
 
 def unwrap_key(wrapped_key: bytes, enc_key: PrivateKey, ctx: FileContext, recipient: str) -> bytes:
-    """Recover the DEK with the recipient's own encryption private key."""
+    """Recover the DEK with the recipient's encryption private key.
+    Raises KeyUnwrapError on any mismatch of key, file or recipient."""
     if not isinstance(wrapped_key, bytes) or len(wrapped_key) != WRAPPED_KEY_LEN:
         raise KeyUnwrapError(f"Wrapped key must be {WRAPPED_KEY_LEN} bytes")
     ephemeral_pub = wrapped_key[:PUBLIC_KEY_LEN]
@@ -75,6 +75,7 @@ def unwrap_key(wrapped_key: bytes, enc_key: PrivateKey, ctx: FileContext, recipi
 
 
 def _derive_kek(shared: bytes, ephemeral_pub: bytes, recipient_pub: bytes, ctx: FileContext, recipient: str) -> bytes:
+    """HKDF over the ECDH secret; salt binds both keys, info binds file and recipient."""
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
         length=KEK_LEN,

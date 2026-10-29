@@ -1,21 +1,20 @@
 """Repaint after a window is mapped mid-draw (Tk on macOS).
 
-Tk on macOS draws only inside the content view's drawRect. drawRect sends
-Expose events to the windows that are mapped at that moment, then runs every
-pending idle task, geometry management included. A window that those idle
-tasks map gets no Expose event, and Tk does not mark the view dirty while it
-is drawing (XMapWindow in macosx/tkMacOSXSubwindows.c, Tk 8.6.13 to 8.6.16).
-The window stays blank until something else redraws that area, such as a
-hover effect when the pointer moves over it.
+Tk on macOS draws only inside the content view's drawRect, which sends Expose to
+the windows mapped at that moment and then runs every pending idle task,
+geometry management included. A window mapped by those idle tasks gets no
+Expose, and Tk does not mark the view dirty while drawing (XMapWindow in
+macosx/tkMacOSXSubwindows.c, Tk 8.6.13 to 8.6.16). It stays blank until
+something else redraws that area, e.g. a hover effect.
 
 Switching pages is the usual trigger: grid_remove unmaps the old page at once
-and asks for a redraw, grid maps the new page only when the idle queue runs,
-and AppKit may call drawRect in between.
+and requests a redraw, grid maps the new page only when the idle queue runs, and
+AppKit may call drawRect in between.
 
-The workaround: after any window is mapped, ask for one more redraw from a
-timer. Timers never run inside drawRect, so the request always comes after
-the mapping. Restacking a hidden frame is a cheap request: Tk marks the
-frame's bounds dirty, and AppKit then redraws the whole view.
+Workaround: after any mapping, request one more redraw from a timer. Timers never
+run inside drawRect, so the request always lands after the mapping. Restacking a
+hidden frame is a cheap way to ask: Tk marks its bounds dirty and AppKit redraws
+the whole view.
 """
 
 from __future__ import annotations
@@ -26,6 +25,8 @@ DELAY_MS = 1
 
 
 class Repainter:
+    """One timer-driven repaint after each burst of <Map> events."""
+
     def __init__(self, root: tk.Misc, marker: tk.Misc) -> None:
         self._root = root
         self._marker = marker

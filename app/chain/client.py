@@ -1,14 +1,14 @@
-"""web3.py client for SecureFileShare (DESIGN.md 5).
+"""web3.py client for SecureFileShare.
 
-Views return frozen dataclasses instead of the positional tuples web3 produces.
-Transactions are built, signed locally with the user's K_eth (eth-account) and
-sent raw, so the node never holds a user key. Before sending, gas is estimated;
-a call that would revert fails there with a decoded ContractRevertError and
-costs nothing. `transact(gas_limit=...)` skips the estimate, which the attack
-scripts use to put a failing transaction on-chain as evidence (DESIGN.md 10.4).
+Views return frozen dataclasses instead of web3's positional tuples.
+Transactions are built, signed locally with the user's K_eth and sent raw, so
+the node never holds a user key. Gas estimation runs first: a call that would
+revert fails there with a decoded ContractRevertError and costs nothing.
+`transact(gas_limit=...)` skips the estimate so a reverting call still gets
+mined; the security demo relies on this.
 
-One account sends one transaction at a time (a lock around nonce, send and
-receipt), so GUI worker threads cannot race each other into a nonce clash.
+Sends are serialised (one lock around nonce, send and receipt), so worker
+threads cannot race each other into a nonce clash.
 """
 
 from __future__ import annotations
@@ -54,6 +54,8 @@ SubmittedCallback = Callable[[str], None]
 
 @dataclass(frozen=True)
 class RegisteredKeys:
+    """A user's on-chain public keys; both empty if never registered."""
+
     sig_public_key: bytes
     enc_public_key: bytes
 
@@ -64,6 +66,8 @@ class RegisteredKeys:
 
 @dataclass(frozen=True)
 class FileRecord:
+    """getFile() result."""
+
     file_id: bytes
     owner: str
     registered_at: int
@@ -75,6 +79,8 @@ class FileRecord:
 
 @dataclass(frozen=True)
 class RequestRecord:
+    """getRequest() result; `wrapped_key` is set only while approved."""
+
     status: RequestStatus
     updated_at: int
     wrapped_key: bytes = field(repr=False)
@@ -82,6 +88,8 @@ class RequestRecord:
 
 @dataclass(frozen=True)
 class TxReceipt:
+    """A mined, successful transaction and the contract events it emitted."""
+
     tx_hash: str
     block_number: int
     gas_used: int
@@ -100,6 +108,8 @@ def load_abi(path: Path = ABI_PATH) -> list[dict[str, Any]]:
 
 
 class ChainClient:
+    """Typed access to one SecureFileShare deployment."""
+
     def __init__(self, w3: Web3, config: NetworkConfig, abi: list[dict[str, Any]] | None = None) -> None:
         abi = load_abi() if abi is None else abi
         self._w3 = w3
@@ -118,6 +128,7 @@ class ChainClient:
         return client
 
     def check_deployment(self) -> None:
+        """Fail fast on a wrong chain, a missing contract or an incompatible one."""
         host, address = self._config.rpc_host, self._config.contract_address
         with self._rpc():
             chain_id = self._w3.eth.chain_id
@@ -199,6 +210,7 @@ class ChainClient:
             )
 
     def get_events(self, from_block: int, to_block: int) -> tuple[ChainEvent, ...]:
+        """Decoded contract events in [from_block, to_block]."""
         with self._rpc():
             logs = self._w3.eth.get_logs(
                 {"address": self.contract_address, "fromBlock": from_block, "toBlock": to_block}
@@ -206,6 +218,7 @@ class ChainClient:
         return self._decoder.decode_all(logs)
 
     # --------------------------------------------------------- transactions
+    # Thin wrappers: check argument shapes, then transact().
 
     def register_keys(
         self,
@@ -289,6 +302,7 @@ class ChainClient:
                     "nonce": self._w3.eth.get_transaction_count(account.address, "pending"),
                 }
                 if gas_limit is None:
+                    # Estimation dry-runs the call: a revert surfaces here, before any gas is spent.
                     estimate = call.estimate_gas({"from": account.address})
                     params["gas"] = estimate + estimate * GAS_MARGIN_PERCENT // 100
                 else:
@@ -300,6 +314,7 @@ class ChainClient:
             receipt = self._wait_for_receipt(tx_hash)
 
         if receipt["status"] != 1:
+            # The receipt carries no reason; replay the call to recover it.
             revert = self._replay_revert(tx, receipt["blockNumber"])
             reason = f": {revert}" if revert is not None else ""
             raise TransactionFailedError(f"Transaction {tx_hash} reverted on-chain{reason}", tx_hash, revert)
@@ -313,6 +328,7 @@ class ChainClient:
     # ------------------------------------------------------------- internal
 
     def _wait_for_receipt(self, tx_hash: str) -> Any:
+        """Poll with exponential backoff until mined or RECEIPT_TIMEOUT_SECONDS passes."""
         deadline = time.monotonic() + RECEIPT_TIMEOUT_SECONDS
         delay = RECEIPT_FIRST_POLL_SECONDS
         while True:

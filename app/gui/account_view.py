@@ -1,8 +1,8 @@
-"""Account (DESIGN.md 4.1, 5.1): who I am, my public keys, the network and my balance.
+"""Account page: identity, public keys, network and balance.
 
-Only fingerprints of public keys are shown; private keys stay inside the
-encrypted keystore. Register keys (and, deliberately harder to reach, replacing
-keys that differ from the ones on-chain) is available here and in the banner.
+Only public-key fingerprints are shown; private keys stay inside the encrypted
+keystore. Key registration is offered here and in the banner; replacing on-chain
+keys that differ from this keystore is deliberately offered here only.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from app.gui.widgets import Badge, Button, Link, hline, label
 from app.services.models import KeyStatus
 
 WIDTH = 640
+# key status: badge text, tone, note
 _KEY_STATUS = {
     KeyStatus.NOT_REGISTERED: ("Not registered", "amber", "Required for signing files and receiving shared files."),
     KeyStatus.MATCHES: ("Registered", "success", "The on-chain keys match this keystore."),
@@ -85,6 +86,7 @@ class AccountPage(Page):
         self.on_account_changed()
 
     def _section(self, column: tk.Frame, title: str, *, last: bool = False) -> tk.Frame:
+        """Heading plus a two-column grid; a hairline follows unless `last`."""
         label(column, title, style="heading").pack(anchor="w")
         grid = tk.Frame(column, background=SURFACE)
         grid.pack(fill="x", pady=(px(10), 0))
@@ -95,6 +97,7 @@ class AccountPage(Page):
         return grid
 
     def on_account_changed(self) -> None:
+        """Refresh keys, key status and balance from the host's latest AccountInfo."""
         info = self.host.account
         if info is None:
             return
@@ -106,6 +109,7 @@ class AccountPage(Page):
         if info.key_status is KeyStatus.MATCHES:
             self._key_button.pack_forget()
         elif info.key_status is KeyStatus.MISMATCH:
+            # The only place a key rotation can start; it asks for confirmation.
             self._key_button.configure_button(text="Replace on-chain keys", kind="danger")
             self._key_button.set_command(lambda: self.host.register_keys(rotate=True))
             self._key_button.pack(anchor="w", pady=(px(10), 0))

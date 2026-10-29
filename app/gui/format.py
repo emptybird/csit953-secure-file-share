@@ -1,4 +1,4 @@
-"""Text shown in the GUI: short ids, balances, times and status names (DESIGN.md 8).
+"""Text shown in the GUI: short ids, balances, times and status names.
 
 Pure functions without Tk, so they are unit-tested directly. Nothing here ever
 formats a private key or a DEK; the most the GUI shows of a key is its
@@ -62,8 +62,8 @@ def parse_file_id(text: str) -> bytes | None:
 
 
 def file_title(name: str, label: str) -> str:
-    """What lists and headings call a file: its original name when this session can
-    read it (my own files, files I decrypted), else its public label."""
+    """Display name of a file: the original name when this session knows it (own or
+    decrypted files), else the public label."""
     return name or label or NO_LABEL
 
 

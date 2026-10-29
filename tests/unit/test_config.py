@@ -1,3 +1,5 @@
+"""Network settings from .env files: loading, defaults and validation."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,6 +12,7 @@ CONTRACT = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
 
 
 def _write_env(root: Path, network: str, **values: str) -> None:
+    """Write a valid .env.<network> under `root`, overriding the given keys."""
     base = {
         "RPC_URL": "http://127.0.0.1:8545",
         "CHAIN_ID": "31337",

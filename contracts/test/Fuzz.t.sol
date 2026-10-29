@@ -7,7 +7,7 @@ import {SecureFileShare} from "../src/SecureFileShare.sol";
 /// @notice Property tests over random callers, keys and byte strings.
 contract FuzzTest is BaseTest {
     /// Any address other than the owner is refused by every owner-only function.
-    function testFuzz_S1_nonOwnerCannotManageFile(address caller) public {
+    function testFuzz_nonOwnerCannotManageFile(address caller) public {
         vm.assume(caller != alice);
         bytes32 fileId = _registerFile(alice, SALT);
         _request(fileId, bob);
@@ -30,6 +30,7 @@ contract FuzzTest is BaseTest {
         _assertStatus(fileId, bob, SecureFileShare.Status.Approved);
     }
 
+    /// Anything but 33 bytes with a 0x02/0x03 prefix is refused, in either key slot.
     function testFuzz_registerKeys_rejectsMalformedKey(bytes calldata key) public {
         vm.assume(!(key.length == 33 && (key[0] == 0x02 || key[0] == 0x03)));
 
@@ -41,6 +42,7 @@ contract FuzzTest is BaseTest {
         vm.stopPrank();
     }
 
+    /// Any well-formed pair of distinct keys is accepted; curve membership is not checked on-chain.
     function testFuzz_registerKeys_acceptsCompressedKeys(bytes32 sigX, bytes32 encX, bool sigOdd, bool encOdd) public {
         vm.assume(sigX != encX || sigOdd != encOdd);
         bytes memory sig = abi.encodePacked(sigOdd ? bytes1(0x03) : bytes1(0x02), sigX);
@@ -70,7 +72,7 @@ contract FuzzTest is BaseTest {
     }
 
     /// Front-running the owner's salt yields another fileId and cannot block the owner.
-    function testFuzz_S16_fileIdIsBoundToSender(address attacker, bytes32 salt) public {
+    function testFuzz_fileIdIsBoundToSender(address attacker, bytes32 salt) public {
         vm.assume(attacker != alice);
         _registerKeys(attacker);
         bytes32 attackerId = _registerFile(attacker, salt);

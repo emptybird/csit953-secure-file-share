@@ -23,6 +23,7 @@ def root() -> Iterator[tk.Tk]:
 
 
 def _run_timers(root: tk.Tk) -> None:
+    """Let the repaint timer come due, then process it."""
     time.sleep(redraw.DELAY_MS / 1000 + 0.02)
     root.update()
 

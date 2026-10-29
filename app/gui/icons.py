@@ -1,9 +1,8 @@
 """Line icons drawn on a Tk canvas, so they stay sharp on Retina and high-DPI screens.
 
-Each icon fits a square of side `size` centred on (x, y) and is drawn with
-round caps in a single colour. `draw(canvas, name, x, y, size, colour)` is the
-only entry point; `logo` draws the app mark used on the login page and sidebar,
-the same key-and-block design as the Dock icon in assets/app-icon.png.
+Each icon fits a square of side `size` centred on (x, y), drawn with round caps
+in one colour. `draw(canvas, name, x, y, size, colour)` renders a named icon;
+`logo` renders the app mark (login page, sidebar), matching assets/app-icon.png.
 """
 
 from __future__ import annotations
@@ -12,6 +11,7 @@ import math
 import tkinter as tk
 from collections.abc import Callable
 
+# (canvas, centre x, centre y, size, colour, stroke width)
 Icon = Callable[[tk.Canvas, float, float, float, str, float], None]
 
 
@@ -198,6 +198,7 @@ _ICONS: dict[str, Icon] = {
 
 
 def draw(canvas: tk.Canvas, name: str, x: float, y: float, size: float, colour: str, width: float = 1.6) -> None:
+    """Draw icon `name` centred on (x, y)."""
     _ICONS[name](canvas, x, y, size, colour, width)
 
 

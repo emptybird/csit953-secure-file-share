@@ -30,6 +30,8 @@ abstract contract BaseTest is Test {
 
     // ------------------------------------------------------------- fixtures
 
+    // Deterministic per-user keys: valid encoding, not real curve points. The
+    // contract checks only the encoding.
     function _sigKey(address user) internal pure returns (bytes memory) {
         return abi.encodePacked(bytes1(0x02), keccak256(abi.encode("sig", user)));
     }
@@ -81,6 +83,7 @@ abstract contract BaseTest is Test {
         assertEq(uint8(share.getRequest(fileId, requester).status), uint8(expected), "request status");
     }
 
+    // Expected revert payloads.
     function _notOwner(bytes32 fileId, address caller) internal pure returns (bytes memory) {
         return abi.encodeWithSelector(SecureFileShare.NotFileOwner.selector, fileId, caller);
     }

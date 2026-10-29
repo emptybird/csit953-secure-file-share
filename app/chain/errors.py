@@ -1,4 +1,4 @@
-"""Readable messages for contract reverts and RPC failures (DESIGN.md 5.6, 8).
+"""Readable messages for contract reverts and RPC failures.
 
 web3.py reports a revert as ContractCustomError whose `data` is the 4-byte error
 selector followed by the ABI-encoded arguments. The selector table is built from
@@ -59,6 +59,7 @@ def error_table(abi: list[dict[str, Any]]) -> dict[bytes, ErrorAbi]:
 
 
 def decode_revert(data: Any, table: ErrorTable) -> ContractRevertError:
+    """Revert data (selector + ABI-encoded args) -> ContractRevertError with a readable message."""
     raw = _revert_bytes(data)
     entry = table.get(raw[:SELECTOR_LEN]) if raw is not None else None
     if entry is None:
@@ -107,6 +108,7 @@ def short_hex(value: bytes) -> str:
 
 
 def _rpc_error(exc: Web3RPCError) -> TransactionError:
+    """Explain the common node rejections; otherwise pass the node's message through."""
     response = exc.rpc_response if isinstance(exc.rpc_response, dict) else {}
     error = response.get("error") if isinstance(response.get("error"), dict) else {}
     message = str(error.get("message") or exc.message or "").strip()
@@ -121,6 +123,7 @@ def _rpc_error(exc: Web3RPCError) -> TransactionError:
 
 
 def _revert_bytes(data: Any) -> bytes | None:
+    """Revert payload as bytes; None if it is not hex or too short for a selector."""
     if isinstance(data, (bytes, bytearray)):
         raw = bytes(data)
     elif isinstance(data, str) and data.startswith("0x"):
@@ -140,6 +143,7 @@ def _status(value: int) -> str:
         return f"status {value}"
 
 
+# Custom error name -> message builder, called with the decoded arguments.
 _MESSAGES: dict[str, Callable[..., str]] = {
     "InvalidPublicKey": lambda: "The public keys must be two different 33-byte compressed secp256k1 keys",
     "KeysNotRegistered": lambda user: f"{to_checksum_address(user)} has not registered public keys yet",

@@ -1,4 +1,4 @@
-"""V1–V6 pipeline without a chain: the anchor stands in for what the contract returns."""
+"""V1-V6 pipeline without a chain: the anchor stands in for what the contract returns."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from app.services.verification import Anchor, Fetched, verify_and_decrypt
 
 CONTENT = b"quarterly numbers\n" * 50
 NAME = "report.txt"
-ALL_PASS = "V1:P V2:P V3:P V4:P Key:P V5:P V6:P"
+ALL_PASS = "V1:P V2:P V3:P V4:P Key:P V5:P V6:P"  # _summary(): code, then Passed / Failed / Skipped
 
 
 @dataclass(frozen=True)
@@ -43,6 +43,7 @@ class Published:
 
 
 def _publish(owner: UserKeys, ctx: FileContext, dek: bytes, recipient: UserKeys, content: bytes = CONTENT) -> Published:
+    """Encrypt, sign and wrap one file the way the owner's client does."""
     encrypted = aead.encrypt_file(dek, ctx, name=NAME, content=content, mime="text/plain")
     signed = signing.sign_manifest(owner.sig_key, signing.build_manifest(ctx, encrypted, created_at=1_760_000_000))
     return Published(
@@ -65,6 +66,7 @@ def _run(
     wrapped_key: bytes | None = None,
     force: bool = False,
 ) -> RetrievedFile:
+    """verify_and_decrypt on the honest inputs, except those overridden."""
     return verify_and_decrypt(
         anchor or published.anchor,
         obj or Fetched(published.encrypted.object_bytes),
@@ -117,37 +119,37 @@ class TestHappyPath:
 
 
 class TestStorageTampering:
-    def test_S6_flipped_ciphertext_byte(self, published: Published, bob: UserKeys) -> None:
+    def test_flipped_ciphertext_byte(self, published: Published, bob: UserKeys) -> None:
         tampered = Fetched(_flip(published.encrypted.object_bytes, 40))
         result = _run(published, bob, obj=tampered)
         assert _summary(result) == "V1:F V2:P V3:P V4:P Key:S V5:S V6:S"
         assert result.plaintext is None
 
-    def test_S6_forced_decrypt_hits_the_gcm_tag(self, published: Published, bob: UserKeys) -> None:
+    def test_forced_decrypt_hits_the_gcm_tag(self, published: Published, bob: UserKeys) -> None:
         tampered = Fetched(_flip(published.encrypted.object_bytes, 40))
         result = _run(published, bob, obj=tampered, force=True)
         assert _summary(result) == "V1:F V2:P V3:P V4:P Key:P V5:F V6:S"
         assert "authentication failed" in result.report.result(Check.V5_DECRYPT).detail
         assert result.plaintext is None
 
-    def test_S7_modified_pt_digest(self, published: Published, bob: UserKeys) -> None:
+    def test_modified_pt_digest(self, published: Published, bob: UserKeys) -> None:
         manifest = Fetched(_manifest_with(published, ptDigest="00" * 32))
         result = _run(published, bob, manifest=manifest)
         assert _summary(result) == "V1:P V2:F V3:P V4:F Key:S V5:S V6:S"
 
-    def test_S7_forced_decrypt_fails_v6(self, published: Published, bob: UserKeys) -> None:
+    def test_forced_decrypt_fails_v6(self, published: Published, bob: UserKeys) -> None:
         manifest = Fetched(_manifest_with(published, ptDigest="00" * 32))
         result = _run(published, bob, manifest=manifest, force=True)
         assert _summary(result) == "V1:P V2:F V3:P V4:F Key:P V5:P V6:F"
         assert result.plaintext is None
 
-    def test_S8_attacker_re_signs_with_own_key(self, published: Published, bob: UserKeys, mallory: UserKeys) -> None:
+    def test_attacker_re_signs_with_own_key(self, published: Published, bob: UserKeys, mallory: UserKeys) -> None:
         forged = dataclasses.replace(published.signed.manifest, pt_digest=b"\x00" * 32)
         resigned = signing.sign_manifest(mallory.sig_key, forged)
         result = _run(published, bob, manifest=Fetched(resigned.to_bytes()))
         assert _summary(result) == "V1:P V2:F V3:P V4:F Key:S V5:S V6:S"
 
-    def test_S8_re_signed_manifest_fails_v4_even_if_hash_matched(
+    def test_re_signed_manifest_fails_v4_even_if_hash_matched(
         self, published: Published, bob: UserKeys, mallory: UserKeys
     ) -> None:
         """V4 alone: the signature is checked with the key from the chain, not with a key
@@ -156,7 +158,7 @@ class TestStorageTampering:
         result = _run(published, bob, manifest=Fetched(resigned.to_bytes()))
         assert _summary(result) == "V1:P V2:P V3:P V4:F Key:S V5:S V6:S"
 
-    def test_S9_rollback_to_an_older_version(self, published: Published, bob: UserKeys) -> None:
+    def test_rollback_to_an_older_version(self, published: Published, bob: UserKeys) -> None:
         older = aead.encrypt_file(published.dek, published.ctx, name=NAME, content=b"draft v1")
         result = _run(published, bob, obj=Fetched(older.object_bytes))
         assert _summary(result).startswith("V1:F V2:P V3:P V4:P")
@@ -197,12 +199,12 @@ class TestWrongContext:
         assert result.report.result(Check.V3_CONTEXT).outcome is Outcome.FAILED
         assert "chainId" in result.report.result(Check.V3_CONTEXT).detail
 
-    def test_S10_someone_elses_wrapped_key(self, published: Published, mallory: UserKeys) -> None:
+    def test_someone_elses_wrapped_key(self, published: Published, mallory: UserKeys) -> None:
         """Mallory copies Bob's wrappedKey from the chain; her own key cannot open it."""
         result = _run(published, mallory)
         assert _summary(result) == "V1:P V2:P V3:P V4:P Key:F V5:S V6:S"
 
-    def test_S11_wrapped_key_of_another_file(
+    def test_wrapped_key_of_another_file(
         self, alice: UserKeys, bob: UserKeys, published: Published, ctx: FileContext
     ) -> None:
         other_ctx = dataclasses.replace(ctx, file_id=compute_file_id(alice.address, b"\x09" * 32))
@@ -223,7 +225,7 @@ class TestOwnerKeys:
         assert "unusable" in result.report.result(Check.V4_SIGNATURE).detail
 
     def test_V6_owner_signed_a_different_plaintext(self, alice: UserKeys, bob: UserKeys, published: Published) -> None:
-        """A dishonest owner signs one ptDigest but encrypts other content; V1–V5 all pass."""
+        """A dishonest owner signs one ptDigest but encrypts other content; V1-V5 all pass."""
         lying = dataclasses.replace(published.signed.manifest, pt_digest=sha256(b"what I promised"))
         signed = signing.sign_manifest(alice.sig_key, lying)
         honest_looking = dataclasses.replace(published, signed=signed)

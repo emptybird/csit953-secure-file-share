@@ -1,13 +1,13 @@
-"""Contract events: decoding, incremental scanning and CSV export (DESIGN.md 5.5).
+"""Contract events: decoding, incremental scanning and CSV export.
 
 Solidity mappings cannot be enumerated, so events are how clients discover files
 (FileRegistered, which also carries the public label) and requesters
 (AccessRequested). Events serve only discovery and the audit trail; the current
 state of a file or request is always read from the view functions.
 
-eth_getLogs is called in block ranges of DEFAULT_CHUNK_BLOCKS because public
-Sepolia endpoints limit the range of a single query, and EventLog remembers how
-far it has scanned so that polling only asks for new blocks.
+eth_getLogs runs in ranges of DEFAULT_CHUNK_BLOCKS because public Sepolia
+endpoints cap the block range per query. EventLog remembers how far it has
+scanned, so polling only fetches new blocks.
 """
 
 from __future__ import annotations
@@ -46,6 +46,8 @@ _CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 @dataclass(frozen=True)
 class ChainEvent:
+    """One decoded log; `args` is read-only."""
+
     name: str
     block_number: int
     tx_hash: str
@@ -66,6 +68,7 @@ class ChainEvent:
         return self.args.get("publicLabel", "")
 
     def details(self) -> str:
+        """Short type-specific summary for the activity list and CSV."""
         if self.name == "KeysRegistered":
             return f"sigKey {fingerprint(self.args['sigPubKey'])}; encKey {fingerprint(self.args['encPubKey'])}"
         if self.name == "FileRegistered":
@@ -81,6 +84,7 @@ class EventDecoder:
         self._events = {bytes.fromhex(contract.events[name].topic[2:]): contract.events[name] for name in EVENT_NAMES}
 
     def decode(self, log: Mapping[str, Any]) -> ChainEvent | None:
+        """None for logs of other contracts, unknown topics or undecodable data."""
         topics = log.get("topics") or ()
         if log.get("address") != self._address or not topics:
             return None
@@ -105,8 +109,8 @@ class EventDecoder:
 
 
 class EventLog:
-    """All events of the contract from its deploy block on. Thread-safe, so a GUI
-    worker can refresh it while another thread reads `events`."""
+    """Every contract event since the deploy block. Thread-safe: a worker can
+    refresh it while another thread reads `events`."""
 
     def __init__(self, client: ChainClient, *, chunk_blocks: int = DEFAULT_CHUNK_BLOCKS) -> None:
         if chunk_blocks < 1:
@@ -136,6 +140,7 @@ class EventLog:
             return found
 
     def file_registrations(self, owner: str | None = None) -> tuple[ChainEvent, ...]:
+        """FileRegistered events, optionally limited to one owner."""
         wanted = None if owner is None else normalize_address(owner)
         return tuple(
             event
@@ -156,8 +161,8 @@ class EventLog:
 
 
 def write_csv(events: Iterable[ChainEvent], path: Path) -> None:
-    """Export for the report's evidence appendix. Cells that a spreadsheet would
-    run as a formula (public labels are attacker-chosen) are prefixed with a quote."""
+    """Export events as CSV. Cells a spreadsheet would run as a formula (public
+    labels are attacker-chosen) get a leading quote."""
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow(CSV_COLUMNS)

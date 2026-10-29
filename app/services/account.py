@@ -1,9 +1,9 @@
-"""The logged-in user's session and public-key registration (DESIGN.md 4.1, 8).
+"""The logged-in user's session and public-key registration.
 
-A Session ties one unlocked keystore to one network: the chain client, the
-object store and the event log. Owner and requester services both work on it.
-It also remembers, in memory only, the original names of the files it has
-decrypted: a name exists only inside the encrypted object (DESIGN.md 2.1, 4.2).
+A Session ties one unlocked keystore to one network: chain client, object store
+and event log. Owner and requester services both run on it. It also caches, in
+memory only, the original names of files it has decrypted, since a name exists
+only inside the encrypted object.
 
 Keys are registered once per account. Registering different keys later is a
 rotation and breaks older files, so it needs an explicit `rotate=True`:
@@ -29,6 +29,8 @@ from app.storage.object_store import LocalObjectStore, ObjectStore
 
 @dataclass(frozen=True, eq=False)
 class Session:
+    """One unlocked keystore bound to one network."""
+
     keys: UserKeys
     chain: ChainClient
     store: ObjectStore
@@ -56,10 +58,13 @@ def open_session(config: AppConfig, keys: UserKeys) -> Session:
 
 
 class AccountService:
+    """Key registration and account status."""
+
     def __init__(self, session: Session) -> None:
         self._session = session
 
     def key_status(self) -> KeyStatus:
+        """Compare the keys registered on-chain with this keystore."""
         keys = self._session.keys
         registered = self._session.chain.get_user_keys(keys.address)
         if not registered.is_registered:
@@ -95,8 +100,8 @@ class AccountService:
         )
 
     def require_registered(self) -> None:
-        """Owners need their on-chain keys to match the keystore so requesters can verify
-        their signatures; requesters need it so they can open the wrapped key they get."""
+        """Raise unless the on-chain keys match this keystore. Owners need that for their
+        signatures to verify; requesters, for the wrapped keys they receive to open."""
         status = self.key_status()
         if status is KeyStatus.NOT_REGISTERED:
             raise KeysNotRegisteredError("Register your public keys first.")

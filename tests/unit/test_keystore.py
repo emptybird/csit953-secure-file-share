@@ -1,3 +1,5 @@
+"""Password-protected keystore: key generation, round trip, unlock failures, files."""
+
 from __future__ import annotations
 
 import copy
@@ -36,7 +38,7 @@ def keys() -> UserKeys:
 
 @pytest.fixture(scope="module")
 def keyfile(keys: UserKeys) -> dict[str, Any]:
-    return encrypt_keystore(keys, PASSWORD, scrypt_n=MIN_SCRYPT_N)
+    return encrypt_keystore(keys, PASSWORD, scrypt_n=MIN_SCRYPT_N)  # cheapest accepted n keeps tests fast
 
 
 def _private_hex(keys: UserKeys) -> list[str]:
@@ -94,6 +96,7 @@ class TestRoundTrip:
 
 
 def _edit(keyfile: dict[str, Any], *path: str, value: Any) -> dict[str, Any]:
+    """Deep copy of `keyfile` with the field at `path` replaced."""
     edited = copy.deepcopy(keyfile)
     target = edited
     for key in path[:-1]:
@@ -107,7 +110,7 @@ def _flip_hex(text: str) -> str:
 
 
 class TestUnlockFailures:
-    def test_S13_wrong_password(self, keyfile: dict[str, Any]) -> None:
+    def test_wrong_password(self, keyfile: dict[str, Any]) -> None:
         with pytest.raises(KeystoreError) as info:
             decrypt_keystore(keyfile, PASSWORD + "!")
         assert str(info.value) == UNLOCK_FAILED

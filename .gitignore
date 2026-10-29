@@ -16,6 +16,3 @@ __pycache__/
 .pytest_cache/
 
 .DS_Store
-
-# assignment brief (not ours to publish)
-task_requirement.md

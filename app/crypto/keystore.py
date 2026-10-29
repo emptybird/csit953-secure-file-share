@@ -1,11 +1,11 @@
-"""Password-protected keystore for a user's three private keys (DESIGN.md 4.1).
+"""Password-protected keystore for a user's three private keys.
 
     key        = scrypt(NFKC(password), salt, n = 2^17, r = 8, p = 1, length = 32)
     ciphertext = AES-256-GCM(key, nonce, {eth, sig, enc}, AAD = canonical header)
 
-The header (version, address, KDF and cipher parameters) is the AAD, so editing
-any field fails exactly like a wrong password. Both give the same message, so
-the error never tells which of the two happened.
+The header (version, address, KDF and cipher parameters) is the AAD: editing any
+field fails exactly like a wrong password, with the same message, so the error
+does not reveal which one happened.
 """
 
 from __future__ import annotations
@@ -47,8 +47,8 @@ KDF_NAME = "scrypt"
 SCRYPT_N = 2**17
 SCRYPT_R = 8
 SCRYPT_P = 1
-# Bounds applied when reading a file: low enough for fast tests, high enough
-# that a crafted keystore cannot make scrypt allocate gigabytes.
+# Accepted n when reading a file: the floor allows fast test keystores, the cap
+# stops a crafted file from making scrypt allocate gigabytes.
 MIN_SCRYPT_N = 2**14
 MAX_SCRYPT_N = 2**18
 SALT_LEN = 16
@@ -117,6 +117,7 @@ def _make_keys(eth_key: bytes, sig_key: PrivateKey, enc_key: PrivateKey) -> User
 
 
 def encrypt_keystore(keys: UserKeys, password: str, *, scrypt_n: int = SCRYPT_N) -> dict[str, Any]:
+    """Encrypt all three keys under a password-derived key; returns the keystore dict."""
     if not isinstance(password, str) or len(password) < MIN_PASSWORD_CHARS:
         raise KeystoreError(f"Password must be at least {MIN_PASSWORD_CHARS} characters")
     params = _KdfParams(salt=os.urandom(SALT_LEN), n=_check_n(scrypt_n))
@@ -134,6 +135,7 @@ def encrypt_keystore(keys: UserKeys, password: str, *, scrypt_n: int = SCRYPT_N)
 
 
 def decrypt_keystore(data: Any, password: str) -> UserKeys:
+    """Unlock a parsed keystore. A wrong password and a tampered file raise the same error."""
     address, params, nonce, ciphertext = _parse(data)
     header = _header(address, params, nonce)
     try:
@@ -141,12 +143,14 @@ def decrypt_keystore(data: Any, password: str) -> UserKeys:
     except InvalidTag:
         raise KeystoreError(UNLOCK_FAILED) from None
     keys = _keys_from_secret(secret)
+    # The header address must belong to the decrypted K_eth.
     if keys.address != address:
         raise KeystoreError(UNLOCK_FAILED)
     return keys
 
 
 def _header(address: str, params: _KdfParams, nonce: bytes) -> dict[str, Any]:
+    """Everything except the ciphertext; doubles as the AAD."""
     return {
         "version": VERSION,
         "address": address,
@@ -156,11 +160,13 @@ def _header(address: str, params: _KdfParams, nonce: bytes) -> dict[str, Any]:
 
 
 def _derive_key(password: str, params: _KdfParams) -> bytes:
+    """scrypt over the NFKC form, so equivalent Unicode input yields the same key."""
     normalized = unicodedata.normalize("NFKC", password).encode("utf-8")
     return Scrypt(salt=params.salt, length=KEY_LEN, n=params.n, r=params.r, p=params.p).derive(normalized)
 
 
 def _parse(data: Any) -> tuple[str, _KdfParams, bytes, bytes]:
+    """Validate layout and parameters before any KDF work; failures raise KeystoreError."""
     try:
         fields = require_fields(data, _FILE_FIELDS, "Keystore")
         if fields["version"] != VERSION:
@@ -239,6 +245,7 @@ def save_keystore(path: Path, data: dict[str, Any], *, overwrite: bool = False) 
 
 
 def load_keystore(path: Path) -> dict[str, Any]:
+    """Read and parse the JSON, size-capped. Unlocking is decrypt_keystore's job."""
     try:
         if path.stat().st_size > MAX_KEYSTORE_BYTES:
             raise KeystoreError(f"{path.name} is too large to be a keystore")

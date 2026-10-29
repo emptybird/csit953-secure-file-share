@@ -1,3 +1,5 @@
+"""Local object store: content addressing, size limits and path safety."""
+
 from __future__ import annotations
 
 import hashlib
@@ -13,7 +15,7 @@ FILE_ID = "0x" + "7c" * 32
 
 @pytest.fixture
 def store(tmp_path: Path) -> LocalObjectStore:
-    return LocalObjectStore(tmp_path / "storage", max_object_bytes=1024)
+    return LocalObjectStore(tmp_path / "storage", max_object_bytes=1024)  # small limit for the limit tests
 
 
 class TestObjects:

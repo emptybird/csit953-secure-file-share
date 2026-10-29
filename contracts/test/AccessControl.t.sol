@@ -5,7 +5,6 @@ import {BaseTest} from "./utils/BaseTest.sol";
 import {SecureFileShare} from "../src/SecureFileShare.sol";
 
 /// @notice Request state machine, owner-only checks and deactivation.
-///         Test names starting with S<n> map to the security matrix in DESIGN.md 10.2.
 contract AccessControlTest is BaseTest {
     bytes32 internal fileId;
 
@@ -28,20 +27,20 @@ contract AccessControlTest is BaseTest {
         assertEq(req.wrappedKey.length, 0);
     }
 
-    function test_S4_requestAccess_unknownFileReverts() public {
+    function test_requestAccess_unknownFileReverts() public {
         bytes32 unknown = keccak256("unknown");
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(SecureFileShare.FileNotFound.selector, unknown));
         share.requestAccess(unknown);
     }
 
-    function test_S4_requestAccess_ownerCannotRequestOwnFile() public {
+    function test_requestAccess_ownerCannotRequestOwnFile() public {
         vm.prank(alice);
         vm.expectRevert(SecureFileShare.OwnerCannotRequest.selector);
         share.requestAccess(fileId);
     }
 
-    function test_S4_requestAccess_requiresRegisteredKeys() public {
+    function test_requestAccess_requiresRegisteredKeys() public {
         vm.prank(nobody);
         vm.expectRevert(abi.encodeWithSelector(SecureFileShare.KeysNotRegistered.selector, nobody));
         share.requestAccess(fileId);
@@ -94,7 +93,7 @@ contract AccessControlTest is BaseTest {
         assertEq(req.wrappedKey, wrapped);
     }
 
-    function test_S1_strangerCannotApprove() public {
+    function test_strangerCannotApprove() public {
         _request(fileId, bob);
         vm.prank(mallory);
         vm.expectRevert(_notOwner(fileId, mallory));
@@ -102,7 +101,7 @@ contract AccessControlTest is BaseTest {
         _assertStatus(fileId, bob, SecureFileShare.Status.Pending);
     }
 
-    function test_S2_requesterCannotApproveOwnRequest() public {
+    function test_requesterCannotApproveOwnRequest() public {
         _request(fileId, bob);
         vm.prank(bob);
         vm.expectRevert(_notOwner(fileId, bob));
@@ -110,7 +109,7 @@ contract AccessControlTest is BaseTest {
         _assertStatus(fileId, bob, SecureFileShare.Status.Pending);
     }
 
-    function test_S3_cannotApproveTwice() public {
+    function test_cannotApproveTwice() public {
         _request(fileId, bob);
         _approve(fileId, alice, bob);
         vm.prank(alice);
@@ -118,7 +117,7 @@ contract AccessControlTest is BaseTest {
         share.approveAccess(fileId, bob, _wrappedKey(SALT));
     }
 
-    function test_S3_cannotApproveRejectedRequest() public {
+    function test_cannotApproveRejectedRequest() public {
         _request(fileId, bob);
         _reject(fileId, alice, bob);
         vm.prank(alice);
@@ -222,7 +221,7 @@ contract AccessControlTest is BaseTest {
         share.revokeAccess(fileId, bob);
     }
 
-    function test_S12_rejectedAndRevokedRequestersHoldNoWrappedKey() public {
+    function test_rejectedAndRevokedRequestersHoldNoWrappedKey() public {
         _request(fileId, bob);
         _reject(fileId, alice, bob);
         _request(fileId, carol);

@@ -1,8 +1,7 @@
 """Sidebar: app mark, navigation, and who is signed in on which network.
 
-The account block at the bottom is always visible, so in a two-window demo it
-is clear which window is Alice and which is Bob, and whether the account can
-still pay for gas.
+The account block at the bottom stays visible, so with two windows open it is
+clear which account each one belongs to and whether it can still pay for gas.
 """
 
 from __future__ import annotations
@@ -33,10 +32,12 @@ from app.gui.theme import (
 from app.gui.widgets import Badge, Button, label, rounded_rect
 from app.services.models import AccountInfo
 
-LOCAL_CHAIN_ID = 31337
+LOCAL_CHAIN_ID = 31337  # Anvil
 
 
 class NavItem(tk.Canvas):
+    """Canvas-drawn navigation entry with an optional pending-count badge."""
+
     def __init__(self, parent: tk.Misc, key: str, text: str, icon: str, command: Callable[[str], None]) -> None:
         super().__init__(
             parent,
@@ -102,6 +103,8 @@ class NavItem(tk.Canvas):
 
 
 class Sidebar(tk.Frame):
+    """App mark, navigation items and the signed-in account block."""
+
     def __init__(
         self,
         parent: tk.Misc,
@@ -126,6 +129,7 @@ class Sidebar(tk.Frame):
             item.pack(fill="x", padx=px(12), pady=px(1))
             self._items[key] = item
 
+        # Packed bottom-up: the Lock button sits lowest, the account block above it.
         lock = Button(self, "Lock", on_lock, kind="quiet", icon="lock", size="sm")
         lock.pack(side="bottom", anchor="w", padx=px(14), pady=(px(6), px(18)))
         self.lock_button = lock

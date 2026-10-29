@@ -1,10 +1,10 @@
-"""Feedback: the step chain, toasts and the account banner (DESIGN.md 8; task brief 2.5).
+"""Feedback: the step chain, toasts and the account banner.
 
 The step chain is how the GUI shows security work. Protect & Register and
 Retrieve & Verify both run as a chain of nodes joined by a rail: a node fills
 green with a check when its step passes, red with a cross when it fails, and
-the rail turns green behind every passed step. Sub-checks (V1–V6) are listed
-under the step they belong to.
+the rail turns green behind every passed step. Sub-checks (V1-V6) are listed
+under their step.
 
 Toasts report transactions (pending, confirmed with block and gas, failed
 with the reason) and request status changes that arrive from the chain.
@@ -42,7 +42,7 @@ from app.gui.theme import (
 )
 from app.gui.widgets import Button, Link, label, surface_of
 
-SPIN_MS = 45
+SPIN_MS = 45  # spinner frame interval
 
 
 class StepState(Enum):
@@ -55,6 +55,8 @@ class StepState(Enum):
 
 @dataclass(frozen=True)
 class SubCheck:
+    """One line under a step, e.g. V1 and its outcome."""
+
     code: str
     title: str
     state: StepState
@@ -102,6 +104,8 @@ class _Spinner:
 
 
 class _Step(tk.Frame):
+    """One node on the rail, with its title, detail line and sub-checks."""
+
     def __init__(self, chain: StepChain, index: int, title: str, detail: str, wrap: int, last: bool) -> None:
         background = surface_of(chain)
         super().__init__(chain, background=background)
@@ -139,6 +143,7 @@ class _Step(tk.Frame):
             detail.configure(wraplength=wrap - px(24))
 
     def draw(self) -> None:
+        """Repaint the node and the rail segments above and below it."""
         rail = self.rail
         if self._spinner is not None:
             self._spinner.stop()
@@ -171,6 +176,7 @@ class _Step(tk.Frame):
             rail.create_text(x, y, text=str(self.index + 1), fill=INK_3, font=font("small_strong"))
 
     def set(self, state: StepState, detail: str | None, on_click: Callable[[], None] | None) -> None:
+        """`detail` None restores the default text; `on_click` turns it into a link."""
         self.state = state
         self.title.configure(foreground=INK_2 if state is StepState.WAITING else INK)
         text = self.default_detail if detail is None else detail
@@ -211,6 +217,7 @@ class _Step(tk.Frame):
 
 
 def _draw_mark(canvas: tk.Canvas, state: StepState) -> None:
+    """The small state mark in front of a sub-check."""
     size = int(canvas.cget("width"))
     centre, stroke = size / 2, max(1.6, px(1.8))
     if state is StepState.DONE:
@@ -250,6 +257,7 @@ class StepChain(tk.Frame):
     def set(
         self, key: Hashable, state: StepState, detail: str | None = None, *, on_click: Callable[[], None] | None = None
     ) -> None:
+        """Update one step; the rail into the next step follows its state."""
         step = self._steps[key]
         step.set(state, detail, on_click)
         index = self._keys.index(key)
@@ -275,6 +283,7 @@ class StepChain(tk.Frame):
 
 # ------------------------------------------------------------------ toasts
 
+# level: icon (empty = spinner), colour, disc colour
 _LEVEL_STYLE = {
     Level.INFO: ("info", ACCENT, ACCENT_SOFT),
     Level.PENDING: ("", ACCENT, ACCENT_SOFT),
@@ -287,6 +296,8 @@ MAX_TOASTS = 4
 
 
 class Toast(tk.Frame):
+    """One notification card, updated in place as a transaction progresses."""
+
     def __init__(self, stack: Toasts, level: Level, title: str, message: str) -> None:
         super().__init__(stack.root, background=SURFACE, highlightthickness=1, highlightbackground=LINE_STRONG)
         self._stack = stack
@@ -316,6 +327,7 @@ class Toast(tk.Frame):
         action: tuple[str, Callable[[], None]] | None = None,
         timeout_ms: int | None = None,
     ) -> None:
+        """Change any part. Every update cancels the auto-close; `timeout_ms` re-arms it."""
         if level is not None:
             self.level = level
             self._draw_icon()
@@ -379,6 +391,7 @@ class Toasts:
         action: tuple[str, Callable[[], None]] | None = None,
         timeout_ms: int | None = 6000,
     ) -> Toast:
+        """Add a toast; beyond MAX_TOASTS the oldest are closed."""
         toast = Toast(self, level, title, message)
         self._items.append(toast)
         while len(self._items) > MAX_TOASTS:
@@ -392,6 +405,7 @@ class Toasts:
             self.layout()
 
     def layout(self) -> None:
+        """Stack up from the bottom-right corner, newest at the bottom."""
         offset = px(20)
         for toast in reversed(self._items):
             toast.update_idletasks()
@@ -406,6 +420,7 @@ class Toasts:
 
 # ------------------------------------------------------------------ banner
 
+# tone: background, foreground, icon
 _BANNER_TONES = {
     "amber": (AMBER_SOFT, AMBER, "warning"),
     "red": (RED_SOFT, RED, "warning"),
@@ -428,6 +443,7 @@ class Banner(tk.Frame):
     def show(
         self, message: str, *, tone: str = "amber", actions: Sequence[tuple[str, Callable[[], None]]] = ()
     ) -> None:
+        """Restyle and refill; the first action is the primary button."""
         background, colour, icon = _BANNER_TONES[tone]
         for widget in (self, self._icon, self._text, self._actions):
             widget.configure(background=background)

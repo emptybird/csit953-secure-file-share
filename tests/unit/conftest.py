@@ -1,3 +1,5 @@
+"""Shared crypto fixtures: three users and one file context on a local chain."""
+
 from __future__ import annotations
 
 import pytest
@@ -31,6 +33,7 @@ def mallory() -> UserKeys:
 
 @pytest.fixture
 def ctx(alice: UserKeys) -> FileContext:
+    """One of Alice's files on the local chain."""
     return FileContext(
         chain_id=CHAIN_ID,
         contract=CONTRACT,

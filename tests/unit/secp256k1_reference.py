@@ -1,8 +1,15 @@
-"""Lab 3 ECDSA written with py_ecc, following the equations in the Lab 3 handout.
+"""Textbook ECDSA on secp256k1 in pure Python (py_ecc), as an independent reference.
 
-Used only to cross-check app.crypto in tests: py_ecc is pure Python and not
-constant-time, so it never handles real keys. Unlike the lab code, the private
-key and nonce come from `secrets`, not `random`.
+    (1) Q = d * G
+    (2) z = SHA-256(M) read as an integer
+    (3) r = x(k * G) mod N, for a random k in [1, N - 1]
+    (4) s = k^-1 * (z + r * d) mod N
+    (5) w = s^-1 mod N
+    (6) u1 = z * w mod N, u2 = r * w mod N
+    (7) X = u1 * G + u2 * Q; valid iff r = x(X) mod N
+
+Test-only: py_ecc is slow and not constant-time, so it never handles real keys.
+Nonces come from `secrets`, never `random`.
 """
 
 from __future__ import annotations
@@ -68,6 +75,7 @@ def decompress(data: bytes) -> Point:
 
 
 def compress(point: Point) -> bytes:
+    """33-byte compressed encoding: 0x02/0x03 by the parity of y, then x."""
     x, y = point
     return bytes([2 + (y % 2)]) + x.to_bytes(32, "big")
 

@@ -27,7 +27,7 @@ contract RegistrationTest is BaseTest {
         assertEq(share.getUserKeys(bob).encPubKey, newEnc);
     }
 
-    function test_S14_registerKeys_rejectsWrongLength() public {
+    function test_registerKeys_rejectsWrongLength() public {
         bytes memory short = abi.encodePacked(bytes1(0x02), bytes31(keccak256("x")));
         bytes memory uncompressed = abi.encodePacked(bytes1(0x04), keccak256("x"), keccak256("y"));
 
@@ -41,7 +41,7 @@ contract RegistrationTest is BaseTest {
         vm.stopPrank();
     }
 
-    function test_S14_registerKeys_rejectsBadPrefix() public {
+    function test_registerKeys_rejectsBadPrefix() public {
         bytes memory prefix04 = abi.encodePacked(bytes1(0x04), keccak256("x"));
         bytes memory prefix00 = abi.encodePacked(bytes1(0x00), keccak256("x"));
 
@@ -133,7 +133,7 @@ contract RegistrationTest is BaseTest {
         vm.stopPrank();
     }
 
-    function test_S5_registerFile_rejectsDuplicateSalt() public {
+    function test_registerFile_rejectsDuplicateSalt() public {
         bytes32 fileId = _registerFile(alice, SALT);
 
         vm.prank(alice);
@@ -141,7 +141,7 @@ contract RegistrationTest is BaseTest {
         share.registerFile(SALT, keccak256("other-ct"), MANIFEST_HASH, _wrappedKey(SALT), LABEL);
     }
 
-    function test_S16_frontRunWithSameSaltGetsDifferentFileId() public {
+    function test_frontRunWithSameSaltGetsDifferentFileId() public {
         bytes32 malloryId = _registerFile(mallory, SALT);
         bytes32 aliceId = _registerFile(alice, SALT);
 

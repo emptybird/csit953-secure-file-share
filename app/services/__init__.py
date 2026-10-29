@@ -1,21 +1,21 @@
-"""Owner and requester workflows on top of crypto/, storage/ and chain/ (DESIGN.md 7).
+"""Owner and requester workflows on top of crypto/, storage/ and chain/.
 
-models        result types the GUI renders (summaries, previews, the V1–V6 report)
+models        result types the GUI renders (summaries, previews, the V1-V6 report)
 account       Session (keys + chain + storage + event log) and key registration
 owner         Protect & Register, request table, approve / reject / revoke / deactivate
 requester     catalogue, request access, retrieve & verify, save plaintext
-verification  the V1–V6 pipeline as pure functions: no network, no disk
+verification  the V1-V6 pipeline as pure functions: no network, no disk
 
-Nothing here imports the GUI, so tests and scripts call the services directly.
-A GUI handler catches ServiceError, ChainError, StorageError and CryptoError;
-all four carry messages that are safe to show.
+No GUI imports, so tests and scripts call the services directly. Callers catch
+ServiceError, ChainError, StorageError and CryptoError; all four carry messages
+that are safe to show.
 """
 
 from __future__ import annotations
 
 
 class ServiceError(Exception):
-    """Base class; the GUI can catch this one type."""
+    """Base class for every workflow failure; catch this one type."""
 
 
 class KeysNotRegisteredError(ServiceError):

@@ -1,3 +1,5 @@
+"""ChainClient against a live Anvil: connection checks, views, transactions, events."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -93,7 +95,7 @@ class TestTransactions:
         assert (event.file_id, event.account) == (protected.file_id, bob.address)
         assert receipt.event("AccessApproved") is None
 
-    def test_S1_revert_is_caught_before_sending(
+    def test_revert_is_caught_before_sending(
         self, chain: ChainClient, mallory: Session, bob: Session, protected: ProtectedFile
     ) -> None:
         chain.request_access(bob.account(), protected.file_id)
@@ -106,10 +108,10 @@ class TestTransactions:
         assert chain.web3.eth.get_transaction_count(mallory.address) == nonce
         assert chain.balance(mallory.address) == balance
 
-    def test_broadcast_failing_transaction_for_evidence(
+    def test_fixed_gas_limit_mines_the_revert(
         self, chain: ChainClient, mallory: Session, bob: Session, protected: ProtectedFile
     ) -> None:
-        """DESIGN.md 10.4 E6: a fixed gas limit skips estimation, so the failed call is mined."""
+        """A fixed gas limit skips estimation, so the reverting call is mined and costs gas."""
         chain.request_access(bob.account(), protected.file_id)
         balance = chain.balance(mallory.address)
         with pytest.raises(TransactionFailedError) as info:
@@ -123,7 +125,7 @@ class TestTransactions:
         assert chain.balance(mallory.address) < balance
         assert chain.get_request(protected.file_id, bob.address).status is RequestStatus.PENDING
 
-    def test_S15_replayed_transaction_is_rejected(
+    def test_replayed_transaction_is_rejected(
         self, chain: ChainClient, bob: Session, protected: ProtectedFile
     ) -> None:
         contract = chain.web3.eth.contract(address=chain.contract_address, abi=load_abi())

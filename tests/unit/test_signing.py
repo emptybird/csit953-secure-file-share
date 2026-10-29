@@ -1,3 +1,5 @@
+"""ECDSA signatures and the signed manifest: format, verification, strict parsing."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -27,6 +29,7 @@ from .test_encoding import VECTOR_FILE_ID, VECTOR_OWNER
 
 MESSAGE = b'{"schema":"sfs-manifest/1"}'
 
+# Known-answer vector: a fixed manifest and the exact bytes that get signed.
 GOLDEN_MANIFEST = Manifest(
     context=FileContext(31337, CONTRACT, VECTOR_FILE_ID, VECTOR_OWNER),
     ct_hash=b"\x11" * 32,
@@ -138,7 +141,7 @@ def _dump(value: Any) -> bytes:
 
 class TestFormat:
     def test_golden_canonical_bytes(self) -> None:
-        """Pins the exact bytes that are signed; any format change must update DESIGN.md 4.3."""
+        """Pins the exact signed bytes; a format change would break every existing signature."""
         assert GOLDEN_MANIFEST.to_bytes() == GOLDEN_BYTES
         assert GOLDEN_MANIFEST.digest() == sha256(GOLDEN_BYTES)
 
@@ -168,14 +171,14 @@ class TestVerification:
     def test_owner_signature_verifies(self, alice: UserKeys, signed: SignedManifest) -> None:
         assert verify_manifest(alice.sig_public_key, SignedManifest.from_bytes(signed.to_bytes()))
 
-    def test_S7_modified_pt_digest_is_detected(self, alice: UserKeys, signed: SignedManifest) -> None:
+    def test_modified_pt_digest_is_detected(self, alice: UserKeys, signed: SignedManifest) -> None:
         stored = _stored(signed)
         stored["manifest"]["ptDigest"] = "00" * 32
         tampered = SignedManifest.from_bytes(_dump(stored))
         assert tampered.manifest.digest() != signed.manifest.digest()  # V2
         assert not verify_manifest(alice.sig_public_key, tampered)  # V4
 
-    def test_S8_attacker_resigning_fails_with_onchain_key(
+    def test_attacker_resigning_fails_with_onchain_key(
         self, alice: UserKeys, mallory: UserKeys, signed: SignedManifest
     ) -> None:
         forged = dataclasses.replace(signed.manifest, ct_hash=b"\xee" * 32)
@@ -189,6 +192,8 @@ class TestVerification:
 
 
 def _set(section: str, key: str, value: Any) -> Callable[[dict], None]:
+    """Mutation setting stored[section][key]; section "" is the top level."""
+
     def mutate(stored: dict) -> None:
         target = stored if section == "" else stored[section]
         target[key] = value

@@ -40,6 +40,7 @@ FUNDING_WEI = 100 * 10**18
 
 
 def _find_anvil() -> str | None:
+    """ANVIL_BIN, then PATH, then Foundry's default install directory."""
     candidates = (os.environ.get("ANVIL_BIN"), shutil.which("anvil"), str(Path.home() / ".foundry" / "bin" / "anvil"))
     return next((path for path in candidates if path and Path(path).is_file()), None)
 
@@ -52,6 +53,7 @@ def _free_port() -> int:
 
 @pytest.fixture(scope="session")
 def anvil_url() -> Iterator[str]:
+    """A private anvil for the whole session, terminated at the end."""
     anvil = _find_anvil()
     if anvil is None:
         pytest.skip("anvil not found: install Foundry or set ANVIL_BIN")
@@ -74,6 +76,7 @@ def anvil_url() -> Iterator[str]:
 
 
 def _wait_until_ready(w3: Web3, process: subprocess.Popen[bytes]) -> None:
+    """Poll until the RPC answers; fail at once if anvil exits."""
     deadline = time.monotonic() + STARTUP_SECONDS
     while time.monotonic() < deadline:
         if process.poll() is not None:
@@ -105,7 +108,7 @@ def chain(network: NetworkConfig) -> ChainClient:
 
 @pytest.fixture(scope="session")
 def storage_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """One store shared by everyone, like the shared STORAGE_DIR of the demo."""
+    """One store shared by every user, like a STORAGE_DIR shared by several GUI windows."""
     return tmp_path_factory.mktemp("storage")
 
 
@@ -126,6 +129,7 @@ def make_session(chain: ChainClient, storage_dir: Path) -> Callable[..., Session
 
 
 def fund(chain: ChainClient, address: str, wei: int = FUNDING_WEI) -> None:
+    """Set the balance directly; Anvil only."""
     chain.web3.provider.make_request("anvil_setBalance", [address, hex(wei)])
 
 
@@ -161,6 +165,7 @@ def free_port() -> int:
 
 @pytest.fixture
 def plaintext(tmp_path: Path) -> Path:
+    """Random binary content under a name with a space in it."""
     path = tmp_path / "quarterly report.pdf"
     path.write_bytes(os.urandom(4096) + b"\x00end")
     return path

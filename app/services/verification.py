@@ -1,4 +1,4 @@
-"""The requester's V1–V6 checks (DESIGN.md 4.3), as pure functions.
+"""The requester's V1-V6 checks, as pure functions.
 
     V1   SHA-256(downloaded object) == on-chain ctHash        storage changed or rolled back the ciphertext
     V2   SHA-256(manifest) == on-chain manifestHash           storage changed the manifest
@@ -8,11 +8,11 @@
     V5   AES-256-GCM decrypt, tag verifies                    modified ciphertext, wrong AAD
     V6   SHA-256(P) == manifest.ptDigest                      content differs from what the owner signed
 
-The trusted side (Anchor) comes from the chain; the untrusted side (Fetched)
-from storage. V1–V4 always all run, so the report shows every independent
-problem at once. The key is unwrapped and the object decrypted only when V1–V4
-passed, unless `force_decrypt` is set: the tamper demo uses that to show GCM
-catching a modified object as well. Plaintext is returned only if all seven pass.
+Anchor (trusted) comes from the chain; Fetched (untrusted) from storage. V1-V4
+always all run, so every independent problem shows at once. Unwrap and decrypt
+run only after V1-V4 pass, unless `force_decrypt` is set (the tamper demo uses
+it to show GCM catching a modified object too). Plaintext is returned only if
+all seven pass.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ _PREFIX = 16
 
 @dataclass(frozen=True)
 class Anchor:
-    """What the chain says about the file. Trusted (DESIGN.md 3)."""
+    """What the chain says about the file. Trusted."""
 
     context: FileContext
     ct_hash: bytes
@@ -54,12 +54,15 @@ def verify_and_decrypt(
     recipient: str,
     force_decrypt: bool = False,
 ) -> RetrievedFile:
+    """Run the checks in order; plaintext is returned only if all of them pass."""
+    # V1-V4 always run, so the report lists every independent problem.
     v1 = _check_ct_hash(anchor, obj)
     signed, v2 = _check_manifest_hash(anchor, manifest)
     v3 = _check_context(anchor, signed)
     v4 = _check_signature(anchor, signed)
     before_key = (v1, v2, v3, v4)
 
+    # No key material is touched unless V1-V4 passed (or decryption is forced).
     if not force_decrypt and not all(r.passed for r in before_key):
         reason = "Skipped because an earlier check failed"
         rest = tuple(_skipped(check, reason) for check in (Check.UNWRAP, Check.V5_DECRYPT, Check.V6_PT_DIGEST))
@@ -88,6 +91,7 @@ def _check_ct_hash(anchor: Anchor, obj: Fetched) -> CheckResult:
 
 
 def _check_manifest_hash(anchor: Anchor, manifest: Fetched) -> tuple[signing.SignedManifest | None, CheckResult]:
+    """V2; also returns the parsed manifest (None if unreadable) for V3, V4 and V6."""
     if manifest.data is None:
         return None, _failed(Check.V2_MANIFEST_HASH, manifest.error or "The manifest could not be downloaded")
     try:
@@ -102,6 +106,7 @@ def _check_manifest_hash(anchor: Anchor, manifest: Fetched) -> tuple[signing.Sig
 
 
 def _check_context(anchor: Anchor, signed: signing.SignedManifest | None) -> CheckResult:
+    """V3: the manifest must describe this exact on-chain record."""
     if signed is None:
         return _skipped(Check.V3_CONTEXT, "No readable manifest")
     manifest, expected = signed.manifest, anchor.context
@@ -119,6 +124,7 @@ def _check_context(anchor: Anchor, signed: signing.SignedManifest | None) -> Che
 
 
 def _check_signature(anchor: Anchor, signed: signing.SignedManifest | None) -> CheckResult:
+    """V4: verify with the owner's on-chain key, never a key shipped with the manifest."""
     if signed is None:
         return _skipped(Check.V4_SIGNATURE, "No readable manifest")
     if not anchor.owner_sig_key:

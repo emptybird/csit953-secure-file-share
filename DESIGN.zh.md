@@ -549,7 +549,7 @@ assignment/
 ├── .env.local / .env.sepolia      # 网络配置，不入库（RPC URL 可能含 API key）
 ├── .env.example                   # 模板，入库，只有占位值
 ├── .gitignore                     # keystore/ .env* storage/ .chain/（例外：.env.example）
-├── environment.yml                # conda env: 953-a2
+├── environment.yml                # conda env: secure-file-share
 └── README.md                      # 安装、运行、两人演示、测试，以及 S1–S16 测试对照表
 ```
 

@@ -19,7 +19,7 @@ from app.gui.widgets import hline, label, vline
 
 
 class Page(tk.Frame):
-    key = ""
+    key = ""  # navigation id, set by each subclass
 
     def __init__(self, parent: tk.Misc, host: Host, title: str, subtitle: str) -> None:
         super().__init__(parent, background=SURFACE)
@@ -45,6 +45,7 @@ class Page(tk.Frame):
 
     # hooks called by the main window
     def wants(self, events: Sequence[ChainEvent]) -> bool:
+        """Whether new events affect this page; True triggers reload()."""
         del events
         return False
 

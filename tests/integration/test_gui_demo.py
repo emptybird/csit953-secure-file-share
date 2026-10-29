@@ -1,7 +1,6 @@
-"""The Demo tab's storage tampering, checked against the real V1–V6 pipeline
-(DESIGN.md 10.2: S6, S7 and a deleted object).
+"""The security demo's storage tampering, checked against the real V1-V6 pipeline.
 
-Uses the tamper functions behind the Demo tab buttons directly, so no display is needed.
+Calls the tamper functions behind the demo buttons directly, so no display is needed.
 """
 
 from __future__ import annotations
@@ -22,12 +21,14 @@ from app.storage.object_store import LocalObjectStore
 
 
 def _approved_copy(owner: Session, requester: Session, protected: ProtectedFile) -> None:
+    """Request and approve, so `requester` can retrieve the file."""
     RequesterService(requester).request_access(protected.file_id)
     service = OwnerService(owner)
     service.approve(service.prepare_approval(protected.file_id, requester.address))
 
 
 def _tamper(session: Session, protected: ProtectedFile, action: str) -> str:
+    """Run one demo tamper action on the stored object and manifest."""
     store = session.store
     assert isinstance(store, LocalObjectStore)
     obj = store.object_path(protected.ct_hash.hex())
@@ -105,7 +106,7 @@ def test_pressing_a_tamper_button_twice_keeps_the_file_tampered(
 def test_unauthorized_approve_is_rejected_before_and_after_broadcast(
     mallory: Session, bob: Session, make_protected: Callable[..., ProtectedFile]
 ) -> None:
-    """What the Demo tab's "Call approveAccess" does, with and without gas estimation."""
+    """What the demo's "Call approveAccess" button does, with and without gas estimation."""
     protected = make_protected()
     RequesterService(bob).request_access(protected.file_id)
     wrapped_key = bytes(WRAPPED_KEY_LEN)

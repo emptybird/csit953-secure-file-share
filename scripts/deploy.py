@@ -46,6 +46,8 @@ class DeployError(RuntimeError):
 
 @dataclass(frozen=True)
 class NetworkConfig:
+    """The part of `.env.<network>` that deployment needs."""
+
     env_path: Path
     rpc_url: str
     chain_id: int
@@ -61,6 +63,7 @@ class Deployment:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Build and export, then deploy and record the address. Returns the exit code."""
     args = _parse_args(argv)
     try:
         artifact = build_and_export()
@@ -111,6 +114,7 @@ def build_and_export() -> dict:
 
 
 def load_network_config(env_path: Path) -> NetworkConfig:
+    """Read RPC_URL, CHAIN_ID and EXPLORER_URL from `env_path`."""
     if not env_path.is_file():
         raise DeployError(f"{env_path.name} not found; copy .env.example to {env_path.name} and fill it in")
     values = dotenv_values(env_path)
@@ -125,6 +129,7 @@ def load_network_config(env_path: Path) -> NetworkConfig:
 
 
 def connect(config: NetworkConfig) -> Web3:
+    """Connect, refusing a node whose chain differs from the env file's CHAIN_ID."""
     # The RPC URL may embed an API key, so only its host is ever printed.
     host = urlparse(config.rpc_url).hostname or "the RPC endpoint"
     w3 = Web3(Web3.HTTPProvider(config.rpc_url, request_kwargs={"timeout": RPC_TIMEOUT_SECONDS}))
@@ -140,13 +145,14 @@ def connect(config: NetworkConfig) -> Web3:
 
 
 def deploy(w3: Web3, artifact: dict, keystore: Path | None, explorer_url: str) -> Deployment:
+    """Send the constructor transaction and wait for the receipt."""
     contract = w3.eth.contract(abi=artifact["abi"], bytecode=artifact["bytecode"])
     try:
-        if keystore is None:
+        if keystore is None:  # the node signs with its own unlocked account
             sender = _node_account(w3)
             _require_balance(w3, sender)
             tx_hash = contract.constructor().transact({"from": sender})
-        else:
+        else:  # sign locally, send raw
             account = _unlock_keystore(keystore)
             _require_balance(w3, account.address)
             tx = contract.constructor().build_transaction(
@@ -188,6 +194,7 @@ def _require_balance(w3: Web3, address: str) -> None:
 
 
 def _unlock_keystore(path: Path) -> LocalAccount:
+    """Decrypt an Ethereum JSON keystore; the password prompt does not echo."""
     path = path.expanduser()
     if not path.is_file():
         raise DeployError(f"keystore not found: {path}")
@@ -206,6 +213,7 @@ def _unlock_keystore(path: Path) -> LocalAccount:
 
 
 def record_deployment(env_path: Path, deployment: Deployment) -> None:
+    """Write CONTRACT_ADDRESS and DEPLOY_BLOCK back into the env file."""
     set_key(env_path, "CONTRACT_ADDRESS", deployment.address, quote_mode="never")
     set_key(env_path, "DEPLOY_BLOCK", str(deployment.block_number), quote_mode="never")
 

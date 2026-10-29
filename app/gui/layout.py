@@ -1,4 +1,4 @@
-"""Containers: rounded panels, scroll areas and selectable lists (DESIGN.md 8).
+"""Containers: rounded panels, scroll areas and selectable lists.
 
 ListView keeps one row widget per key and updates rows in place when the data
 refreshes, so a poll every few seconds does not flicker or lose the selection.
@@ -90,6 +90,7 @@ class _ScrollBar(tk.Canvas):
         self._draw()
 
     def _press(self, event: tk.Event) -> None:
+        # On the thumb: start a drag. Elsewhere: jump so the thumb centres on the click.
         height = max(1, self.winfo_height())
         if self._first * height <= event.y <= self._last * height:
             self._drag = (event.y, self._first)
@@ -135,12 +136,15 @@ class ScrollArea(tk.Frame):
         self.canvas.sfs_scroll_area = self  # found by the mouse-wheel dispatcher
 
     def _content_changed(self) -> None:
+        """The scroll region follows the body's requested size."""
         self.canvas.configure(scrollregion=(0, 0, self.body.winfo_reqwidth(), self.body.winfo_reqheight()))
 
     def _view_changed(self, event: tk.Event) -> None:
+        """Keep the body exactly as wide as the viewport."""
         self.canvas.itemconfigure(self._window, width=event.width)
 
     def scroll(self, units: int) -> None:
+        # Content that fits must not scroll.
         if self.body.winfo_reqheight() > self.canvas.winfo_height():
             self.canvas.yview_scroll(units, "units")
 
@@ -175,7 +179,7 @@ def install_mousewheel(root: tk.Misc) -> None:
         area.scroll(units)
 
     root.bind_all("<MouseWheel>", wheel, add="+")
-    if sys.platform.startswith("linux"):
+    if sys.platform.startswith("linux"):  # X11 reports the wheel as buttons 4 and 5
         root.bind_all("<Button-4>", wheel, add="+")
         root.bind_all("<Button-5>", wheel, add="+")
 
@@ -223,19 +227,20 @@ class ListRow(tk.Frame):
         self.body = tk.Frame(self, background=SURFACE)
         self.body.pack(side="left", fill="both", expand=True, padx=(px(17), px(20)), pady=px(13))
         separator = tk.Frame(view.body, height=1, background=LINE)
-        separator.sfs_keep_colour = True
+        separator.sfs_keep_colour = True  # skipped by _paint
         self.separator = separator
 
     def finish(self, on_click: Callable[[str], None]) -> None:
         """Call after the content is built: binds clicks and hover on every descendant."""
         for widget in _descendants(self):
-            if isinstance(widget, Button):
+            if isinstance(widget, Button):  # buttons keep their own click handling
                 continue
             widget.bind("<Button-1>", lambda _e: on_click(self.key), add="+")
             widget.bind("<Enter>", lambda _e: self._set_hover(True), add="+")
             widget.bind("<Leave>", lambda _e: self.after_idle(self._check_hover), add="+")
 
     def _check_hover(self) -> None:
+        """<Leave> also fires when the pointer moves onto a child; ask where it really is."""
         if not self.winfo_exists():
             return
         x, y = self.winfo_pointerxy()
@@ -312,6 +317,7 @@ class ListView(ScrollArea, Generic[T]):
         return list(self._order)
 
     def set_items(self, items: Sequence[tuple[str, T]]) -> None:
+        """Diff against the current rows: drop gone keys, refill existing rows, build new ones."""
         if self._loading is not None:
             self._loading.destroy()
             self._loading = None
@@ -330,6 +336,7 @@ class ListView(ScrollArea, Generic[T]):
                 self._rows[key] = row
             else:
                 self._fill(row, item)
+        # Repack only when the order changed; repacking on every poll would flicker.
         if keys != self._order:
             for key in self._order:
                 if key in self._rows:

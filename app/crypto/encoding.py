@@ -1,8 +1,8 @@
 """Canonical encodings and secp256k1 keys shared by the crypto modules.
 
-Everything that is hashed, signed or used as AAD is built here, so the owner and
-the requester always produce the same bytes. Parsers are strict: anything that
-is not in canonical form is rejected rather than repaired.
+Everything hashed, signed or used as AAD is built here, so owner and requester
+always produce the same bytes. Parsers are strict: non-canonical input is
+rejected, never repaired.
 
 Public keys travel as 33-byte compressed points, the format the contract stores.
 Private keys travel as 32-byte big-endian scalars, only inside the keystore.
@@ -58,6 +58,7 @@ def strict_json_loads(data: bytes, *, max_bytes: int, what: str) -> Any:
 
 
 def require_fields(value: Any, fields: frozenset[str], what: str) -> dict[str, Any]:
+    """A dict with exactly `fields`: nothing missing, nothing extra."""
     if not isinstance(value, dict) or set(value) != fields:
         raise EncodingError(f"{what} must have exactly the fields {', '.join(sorted(fields))}")
     return value
@@ -109,6 +110,7 @@ def to_hex32(data: bytes) -> str:
 
 
 def from_hex32(text: Any, what: str) -> bytes:
+    """Inverse of to_hex32."""
     if not isinstance(text, str) or not text.startswith("0x"):
         raise EncodingError(f"{what} must be 0x followed by 64 lowercase hex characters")
     return from_hex(text[2:], HASH_LEN, what)
@@ -146,13 +148,14 @@ def address_bytes(address: str) -> bytes:
 
 
 def uint256_bytes(value: int) -> bytes:
+    """32-byte big-endian, the abi.encode layout of a uint256."""
     if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value < 2**256:
         raise EncodingError("Value does not fit in uint256")
     return value.to_bytes(UINT256_LEN, "big")
 
 
 def compute_file_id(owner: str, salt: bytes) -> bytes:
-    """keccak256(abi.encode(owner, salt)), the same as SecureFileShare.computeFileId."""
+    """keccak256(abi.encode(owner, salt)); must match SecureFileShare.computeFileId."""
     if len(salt) != HASH_LEN:
         raise EncodingError("File salt must be 32 bytes")
     return keccak(bytes(UINT256_LEN - ADDRESS_LEN) + address_bytes(owner) + salt)
@@ -219,8 +222,7 @@ def public_key_bytes(key: PrivateKey | PublicKey) -> bytes:
 
 
 def load_public_key(data: bytes) -> PublicKey:
-    """Parse a compressed point and reject anything that is not on the curve.
-    Accepting an off-curve point would allow invalid-curve attacks on ECDH."""
+    """Parse a compressed point; reject anything off the curve (invalid-curve attacks on ECDH)."""
     if not isinstance(data, bytes) or len(data) != PUBLIC_KEY_LEN or data[0] not in (2, 3):
         raise InvalidKeyError("Public key must be a 33-byte compressed point (prefix 0x02 or 0x03)")
     if int.from_bytes(data[1:], "big") >= P:

@@ -1,12 +1,12 @@
-"""File encryption with AES-256-GCM (DESIGN.md 4.2).
+"""File encryption with AES-256-GCM.
 
     P      = len(header) (4, big-endian) | header | file bytes
     AAD    = "SFS-v1" | chainId (32) | contract (20) | fileId (32) | owner (20)
     object = "SFS1" | nonce (12) | AES-256-GCM(DEK, nonce, P, AAD)    # last 16 bytes are the tag
 
-The file name lives in the encrypted header, so storage never sees it. The
-header's random salt makes SHA-256(P) impossible to confirm by guessing the file.
-Each DEK encrypts exactly one object, so a random 96-bit nonce never repeats.
+The file name lives in the encrypted header, so storage never sees it. The random
+header salt stops a guessed file from being confirmed against SHA-256(P).
+One DEK per object, so a random 96-bit nonce is never reused under a key.
 """
 
 from __future__ import annotations
@@ -48,9 +48,9 @@ MIN_OBJECT_LEN = len(OBJECT_MAGIC) + NONCE_LEN + TAG_LEN
 
 _HEADER_FIELDS = frozenset({"name", "mime", "size", "salt"})
 _FORBIDDEN_NAMES = frozenset({".", ".."})
-# Unicode categories a file name may not contain: controls (Cc), invisible format
-# characters (Cf, e.g. U+202E RIGHT-TO-LEFT OVERRIDE, which makes "invoice<U+202E>fdp.exe"
-# display as "invoiceexe.pdf"), lone surrogates (Cs) and line or paragraph separators.
+# Unicode categories banned in file names: controls (Cc), invisible format chars (Cf;
+# U+202E RIGHT-TO-LEFT OVERRIDE renders "invoice<U+202E>fdp.exe" as "invoiceexe.pdf"),
+# lone surrogates (Cs), line and paragraph separators (Zl, Zp).
 _FORBIDDEN_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
 
 
@@ -110,10 +110,12 @@ def generate_dek() -> bytes:
 
 
 def file_aad(ctx: FileContext) -> bytes:
+    """Binds the object to its on-chain record: chain, contract, fileId, owner."""
     return AAD_TAG + ctx.location_bytes() + address_bytes(ctx.owner)
 
 
 def encrypt_file(dek: bytes, ctx: FileContext, *, name: str, content: bytes, mime: str = DEFAULT_MIME) -> EncryptedFile:
+    """Seal header + content under `dek`, bound to `ctx` through the AAD."""
     check_dek(dek)
     header = FileHeader(name=name, mime=mime, size=len(content), salt=os.urandom(HEADER_SALT_LEN)).to_bytes()
     plaintext = len(header).to_bytes(HEADER_LEN_BYTES, "big") + header + content
@@ -123,8 +125,8 @@ def encrypt_file(dek: bytes, ctx: FileContext, *, name: str, content: bytes, mim
 
 
 def decrypt_file(dek: bytes, ctx: FileContext, object_bytes: bytes) -> DecryptedFile:
-    """Raises DecryptionError if the tag does not verify: wrong DEK, a different
-    file context (AAD), or any modified byte."""
+    """Open an SFS1 object. Raises DecryptionError if the tag does not verify:
+    wrong DEK, different file context (AAD) or any modified byte."""
     check_dek(dek)
     if len(object_bytes) < MIN_OBJECT_LEN or not object_bytes.startswith(OBJECT_MAGIC):
         raise DecryptionError("Not an SFS1 ciphertext object")
@@ -141,6 +143,8 @@ def decrypt_file(dek: bytes, ctx: FileContext, object_bytes: bytes) -> Decrypted
 
 
 def _split_plaintext(plaintext: bytes) -> tuple[FileHeader, bytes]:
+    """Split P into header and content. A valid tag does not make P well-formed (the
+    owner may be malicious), so every length is checked."""
     if len(plaintext) < HEADER_LEN_BYTES:
         raise DecryptionError("Decrypted data is too short")
     header_len = int.from_bytes(plaintext[:HEADER_LEN_BYTES], "big")
@@ -163,10 +167,9 @@ def check_dek(dek: bytes) -> None:
 
 
 def _check_file_name(name: str) -> None:
-    """A bare file name: no directories, so saving it can never escape the chosen folder,
-    and no invisible characters, so the name on screen is the name that gets saved.
-    Owners pass this check when encrypting; requesters pass it again when decrypting,
-    because a malicious owner need not use this client."""
+    """Bare file name only: no separators, so saving cannot escape the target folder;
+    no invisible characters, so the name shown is the name saved. Re-checked on
+    decryption, since a malicious owner need not use this client."""
     require_str(name, "File name", max_chars=MAX_NAME_CHARS)
     unsafe = any(ch in "/\\" or unicodedata.category(ch) in _FORBIDDEN_CATEGORIES for ch in name)
     if name in _FORBIDDEN_NAMES or unsafe:

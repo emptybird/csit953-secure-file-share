@@ -1,9 +1,9 @@
-"""Browse files (DESIGN.md 8, requester): every registered file and my access to it.
+"""Browse files page: every registered file and the user's access to it.
 
-The list shows my status for each file and refreshes when the owner decides.
-From the detail pane I request access, and once approved open Retrieve and
-verify. My own encryption-key fingerprint is shown next to the request, so I
-can read it to the owner when they check it in the approval dialog.
+The list shows the user's request status per file and refreshes when the owner
+decides. The detail pane requests access and, once approved, opens Retrieve and
+verify. The user's own encryption-key fingerprint is shown next to the request,
+so it can be read out to the owner, who checks it in the approval dialog.
 """
 
 from __future__ import annotations
@@ -26,7 +26,8 @@ from app.services.models import FileSummary
 from app.services.requester import RequesterService
 
 DETAIL_WRAP = 330
-_REQUESTABLE = (RequestStatus.NONE, RequestStatus.REJECTED, RequestStatus.REVOKED)
+_REQUESTABLE = (RequestStatus.NONE, RequestStatus.REJECTED, RequestStatus.REVOKED)  # requestAccess allowed
+# request status -> explanation in the detail pane
 _EXPLAIN = {
     RequestStatus.NONE: "Not requested. The owner reviews each request before sharing the file key.",
     RequestStatus.PENDING: "Awaiting the owner's decision. This page updates automatically.",
@@ -81,6 +82,7 @@ class BrowsePage(Page):
     # -------------------------------------------------------------- loading
 
     def reload(self) -> None:
+        """Load the catalogue on the worker; calls made meanwhile coalesce into one."""
         if self._loading:
             self._reload_again = True
             return
@@ -90,10 +92,12 @@ class BrowsePage(Page):
         )
 
     def wants(self, events: Sequence[ChainEvent]) -> bool:
+        """New or deactivated files, or any event about the user."""
         me = self.host.session.address
         return any(e.name in ("FileRegistered", "FileDeactivated") or e.account == me for e in events)
 
     def on_show(self, **options: object) -> None:
+        """Select `file_id` if given, switching to All files so the row is visible."""
         file_id = options.get("file_id")
         if isinstance(file_id, bytes):
             self._wanted = file_id_text(file_id)
@@ -102,7 +106,7 @@ class BrowsePage(Page):
 
     def _loaded(self, files: tuple[FileSummary, ...]) -> None:
         self._files = {file_id_text(f.file_id): f for f in files}
-        self._order = list(reversed(self._files))
+        self._order = list(reversed(self._files))  # newest first
         self._render()
         self._loading = False
         if self._reload_again:
@@ -118,10 +122,12 @@ class BrowsePage(Page):
         self._render()
 
     def _render(self) -> None:
+        """Apply scope and search to the cached catalogue; no RPC."""
         mine_only = self._scope.get() == "mine"
         shown = []
         for key in self._order:
             summary = self._files[key]
+            # "My requests": files the user has asked for; own files never count.
             if mine_only and (summary.is_mine or summary.my_status is RequestStatus.NONE):
                 continue
             if self._query and self._query not in f"{key} {summary.name} {summary.label} {summary.owner}".lower():
@@ -152,6 +158,7 @@ class BrowsePage(Page):
         self._show_detail()
 
     def _show_detail(self) -> None:
+        """Rebuild the detail pane for the selected file."""
         body = self._detail.body
         clear(body)
         summary = self._selected()
@@ -191,6 +198,7 @@ class BrowsePage(Page):
             RequestStatus.PENDING,
             RequestStatus.APPROVED,
         ):
+            # The fingerprint the owner sees in the approval dialog; read it out to them.
             keys = tk.Frame(pane, background=SURFACE)
             keys.pack(fill="x", pady=(px(12), 0))
             label(keys, "Your encryption key", style="small", colour=INK_2).pack(side="left")
@@ -199,6 +207,7 @@ class BrowsePage(Page):
         self._action_button(pane, summary)
 
     def _action_button(self, pane: tk.Frame, summary: FileSummary) -> None:
+        """The one action that fits the user's status: retrieve, request, or a disabled state."""
         idle = not self.host.tx_in_flight
         if summary.can_retrieve:
             button = Button(
@@ -230,6 +239,7 @@ class BrowsePage(Page):
 
 
 def _explain(summary: FileSummary) -> str:
+    """Status text for the detail pane."""
     if summary.is_mine:
         return "You own this file. Retrieve and verify uses your copy of the file key."
     if not summary.active and summary.my_status is not RequestStatus.APPROVED:
@@ -240,6 +250,7 @@ def _explain(summary: FileSummary) -> str:
 # ------------------------------------------------------------------- rows
 
 
+# ListView callbacks: build a row's widgets once, fill them on every refresh.
 def _build_row(row: ListRow) -> None:
     body = row.body
     body.columnconfigure(0, weight=1)

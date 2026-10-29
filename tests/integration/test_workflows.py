@@ -1,4 +1,4 @@
-"""End-to-end owner and requester workflows on Anvil (DESIGN.md 7, 10.1)."""
+"""End-to-end owner and requester workflows on Anvil."""
 
 from __future__ import annotations
 
@@ -161,8 +161,8 @@ class TestHappyPath:
 
 
 class TestFileNames:
-    """The original name exists only inside the encrypted object (DESIGN.md 2.1), so
-    only the owner and requesters who decrypted the file can show it."""
+    """The original name exists only inside the encrypted object, so only the owner
+    and requesters who decrypted the file can show it."""
 
     def test_owner_reads_names_back_after_a_restart(
         self, make_session: Callable[..., Session], alice: Session, plaintext: Path
@@ -314,7 +314,7 @@ class TestRequesterErrors:
 
 
 class TestStorageFailures:
-    """Detection through the real store; README.md maps every S1–S16 case to its test."""
+    """Tamper detection through the real store."""
 
     def test_tampered_object_is_reported_not_decrypted(
         self, alice: Session, bob: Session, protected: ProtectedFile
@@ -355,7 +355,7 @@ class TestOwnerInputChecks:
         with pytest.raises(ServiceError, match="larger than"):
             OwnerService(alice).protect_file(plaintext)
 
-    def test_S14_off_curve_encryption_key_is_refused(
+    def test_off_curve_encryption_key_is_refused(
         self, chain: ChainClient, alice: Session, make_session: Callable[..., Session], protected: ProtectedFile
     ) -> None:
         """The contract checks only length and prefix; the owner's client must refuse to

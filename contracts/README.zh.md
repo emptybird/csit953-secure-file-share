@@ -41,7 +41,7 @@ approve 不检查 active；允许 Approved 状态再次申请。Demo 时可以�
 ```sh
 ./scripts/start_chain.sh                        # 另开一个终端；状态存在 .chain/state.json
 cp .env.example .env.local
-conda activate 953-a2
+conda activate secure-file-share
 python scripts/deploy.py --network local
 ```
 

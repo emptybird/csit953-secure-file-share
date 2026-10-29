@@ -18,7 +18,7 @@ CSIT953 Assignment 2：一个文件存储与共享系统，把客户端密码学
 
 | 工具 | 用途 |
 |---|---|
-| conda（Miniforge 或 Miniconda） | 用 `environment.yml` 创建 `953-a2` 环境：Python 3.11、Tk ≥ 8.6.13、cryptography、web3、eth-account、python-dotenv、pytest、py_ecc、bandit |
+| conda（Miniforge 或 Miniconda） | 用 `environment.yml` 创建 `secure-file-share` 环境：Python 3.11、Tk ≥ 8.6.13、cryptography、web3、eth-account、python-dotenv、pytest、py_ecc、bandit |
 | [Foundry](https://book.getfoundry.sh/getting-started/installation) | `anvil`（本地链）和 `forge`（编译合约、跑合约测试） |
 
 `forge-std` 已经放在 `contracts/lib/` 里，不用再执行 `forge install`。Windows 上的 Foundry 要在 Git Bash 或 WSL 里用；没装 Foundry 时，`scripts/deploy.py` 直接部署 `app/chain/abi/` 里已提交的 artifact。
@@ -29,7 +29,7 @@ CSIT953 Assignment 2：一个文件存储与共享系统，把客户端密码学
 
 ```sh
 conda env create -f environment.yml
-conda activate 953-a2
+conda activate secure-file-share
 cp .env.example .env.local
 
 ./scripts/start_chain.sh                     # 终端 1：Anvil，监听 127.0.0.1:8545，chain 31337
@@ -96,22 +96,22 @@ DESIGN.md §10.2 的每个场景都有自动化测试。Solidity 测试在 `cont
 
 | 编号 | 场景 | 预期结果 | 测试 |
 |---|---|---|---|
-| S1 | 其他用户对 Alice 的文件调用 `approveAccess` | revert `NotFileOwner` | `AccessControl.t.sol::test_S1_strangerCannotApprove`, `Fuzz.t.sol::testFuzz_S1_nonOwnerCannotManageFile`, `test_chain_client.py::test_S1_revert_is_caught_before_sending`, `test_gui_demo.py::test_unauthorized_approve_is_rejected_before_and_after_broadcast` |
-| S2 | Bob 批准自己的申请 | revert `NotFileOwner` | `AccessControl.t.sol::test_S2_requesterCannotApproveOwnRequest` |
-| S3 | 重复批准，或批准已拒绝的申请 | revert `InvalidStatus` | `AccessControl.t.sol::test_S3_cannotApproveTwice`, `test_S3_cannotApproveRejectedRequest` |
-| S4 | owner 申请自己的文件；文件不存在；申请人没登记公钥 | revert `OwnerCannotRequest`、`FileNotFound`、`KeysNotRegistered` | `AccessControl.t.sol::test_S4_*` |
-| S5 | 用同一个 salt 登记两次 | revert `FileAlreadyExists` | `Registration.t.sol::test_S5_registerFile_rejectsDuplicateSalt` |
-| S6 | 翻转存储中密文的一个字节 | V1 失败；强行解密时 V5 失败 | `test_verification.py::test_S6_*`, `test_aead.py::test_S6_any_flipped_byte_is_detected` |
-| S7 | 改掉存储中 manifest 的 ptDigest | V2 和 V4 失败；强行解密时 V6 失败 | `test_verification.py::test_S7_*`, `test_signing.py::test_S7_modified_pt_digest_is_detected` |
-| S8 | 攻击者伪造 manifest 并用自己的密钥重新签名 | V4 失败，验签公钥取自链上 | `test_verification.py::test_S8_*`, `test_signing.py::test_S8_attacker_resigning_fails_with_onchain_key` |
-| S9 | 把对象回滚到旧版本 | V1 失败 | `test_verification.py::test_S9_rollback_to_an_older_version` |
-| S10 | Mallory 用自己的私钥解 Bob 的 wrappedKey | 解封失败 | `test_verification.py::test_S10_someone_elses_wrapped_key`, `test_ecies.py::test_S10_other_users_key_fails` |
-| S11 | 把文件 A 的 wrappedKey 用在文件 B 上 | 解封失败（HKDF info 和 AAD 都不同） | `test_verification.py::test_S11_wrapped_key_of_another_file`, `test_ecies.py::test_S11_wrapped_key_cannot_move_to_another_file` |
-| S12 | 被拒绝或被撤销的申请人索要密钥 | 链上没有 wrappedKey；客户端拒绝 | `AccessControl.t.sol::test_S12_rejectedAndRevokedRequestersHoldNoWrappedKey`, `test_workflows.py::TestRejectBranch`, `TestRevokeBranch` |
-| S13 | keystore 密码错误 | 打不开；提示与文件损坏时相同 | `test_keystore.py::test_S13_wrong_password`, `test_tampering_looks_like_a_wrong_password` |
-| S14 | 登记格式错误或不在曲线上的公钥 | 合约 revert；owner 的客户端拒绝加密文件密钥 | `Registration.t.sol::test_S14_*`, `test_workflows.py::test_S14_off_curve_encryption_key_is_refused` |
-| S15 | 重放已上链的交易 | 节点拒绝已用过的 nonce | `test_chain_client.py::test_S15_replayed_transaction_is_rejected` |
-| S16 | 抢先用同一个 salt 登记（front-run） | fileId 不同；owner 不受影响 | `Registration.t.sol::test_S16_frontRunWithSameSaltGetsDifferentFileId`, `Fuzz.t.sol::testFuzz_S16_fileIdIsBoundToSender` |
+| S1 | 其他用户对 Alice 的文件调用 `approveAccess` | revert `NotFileOwner` | `AccessControl.t.sol::test_strangerCannotApprove`, `Fuzz.t.sol::testFuzz_nonOwnerCannotManageFile`, `test_chain_client.py::test_revert_is_caught_before_sending`, `test_gui_demo.py::test_unauthorized_approve_is_rejected_before_and_after_broadcast` |
+| S2 | Bob 批准自己的申请 | revert `NotFileOwner` | `AccessControl.t.sol::test_requesterCannotApproveOwnRequest` |
+| S3 | 重复批准，或批准已拒绝的申请 | revert `InvalidStatus` | `AccessControl.t.sol::test_cannotApproveTwice`, `test_cannotApproveRejectedRequest` |
+| S4 | owner 申请自己的文件；文件不存在；申请人没登记公钥 | revert `OwnerCannotRequest`、`FileNotFound`、`KeysNotRegistered` | `AccessControl.t.sol::test_requestAccess_unknownFileReverts`, `test_requestAccess_ownerCannotRequestOwnFile`, `test_requestAccess_requiresRegisteredKeys` |
+| S5 | 用同一个 salt 登记两次 | revert `FileAlreadyExists` | `Registration.t.sol::test_registerFile_rejectsDuplicateSalt` |
+| S6 | 翻转存储中密文的一个字节 | V1 失败；强行解密时 V5 失败 | `test_verification.py::test_flipped_ciphertext_byte`, `test_forced_decrypt_hits_the_gcm_tag`, `test_aead.py::test_any_flipped_byte_is_detected` |
+| S7 | 改掉存储中 manifest 的 ptDigest | V2 和 V4 失败；强行解密时 V6 失败 | `test_verification.py::test_modified_pt_digest`, `test_forced_decrypt_fails_v6`, `test_signing.py::test_modified_pt_digest_is_detected` |
+| S8 | 攻击者伪造 manifest 并用自己的密钥重新签名 | V4 失败，验签公钥取自链上 | `test_verification.py::test_attacker_re_signs_with_own_key`, `test_re_signed_manifest_fails_v4_even_if_hash_matched`, `test_signing.py::test_attacker_resigning_fails_with_onchain_key` |
+| S9 | 把对象回滚到旧版本 | V1 失败 | `test_verification.py::test_rollback_to_an_older_version` |
+| S10 | Mallory 用自己的私钥解 Bob 的 wrappedKey | 解封失败 | `test_verification.py::test_someone_elses_wrapped_key`, `test_ecies.py::test_other_users_key_fails` |
+| S11 | 把文件 A 的 wrappedKey 用在文件 B 上 | 解封失败（HKDF info 和 AAD 都不同） | `test_verification.py::test_wrapped_key_of_another_file`, `test_ecies.py::test_wrapped_key_cannot_move_to_another_file` |
+| S12 | 被拒绝或被撤销的申请人索要密钥 | 链上没有 wrappedKey；客户端拒绝 | `AccessControl.t.sol::test_rejectedAndRevokedRequestersHoldNoWrappedKey`, `test_workflows.py::TestRejectBranch`, `TestRevokeBranch` |
+| S13 | keystore 密码错误 | 打不开；提示与文件损坏时相同 | `test_keystore.py::test_wrong_password`, `test_tampering_looks_like_a_wrong_password` |
+| S14 | 登记格式错误或不在曲线上的公钥 | 合约 revert；owner 的客户端拒绝加密文件密钥 | `Registration.t.sol::test_registerKeys_rejectsWrongLength`, `test_registerKeys_rejectsBadPrefix`, `test_workflows.py::test_off_curve_encryption_key_is_refused` |
+| S15 | 重放已上链的交易 | 节点拒绝已用过的 nonce | `test_chain_client.py::test_replayed_transaction_is_rejected` |
+| S16 | 抢先用同一个 salt 登记（front-run） | fileId 不同；owner 不受影响 | `Registration.t.sol::test_frontRunWithSameSaltGetsDifferentFileId`, `Fuzz.t.sol::testFuzz_fileIdIsBoundToSender` |
 
 ## 目录结构
 
@@ -159,7 +159,7 @@ evidence/        EVIDENCE.md（报告用的测试和扫描结果）、logs/、co
 
 | 现象 | 解决办法 |
 |---|---|
-| macOS 上点击没反应，或窗口绘制异常 | 在 `953-a2` conda 环境里运行（Tk ≥ 8.6.13）；Tk 版本过旧时应用会给出警告 |
+| macOS 上点击没反应，或窗口绘制异常 | 在 `secure-file-share` conda 环境里运行（Tk ≥ 8.6.13）；Tk 版本过旧时应用会给出警告 |
 | "No contract at … deploy it first" | 链被重置过；重新运行 `python scripts/deploy.py --network local` |
 | "Cannot reach 127.0.0.1 …" | 启动 `./scripts/start_chain.sh` |
 | "Not enough ETH in this account to pay for gas" | 本地链上点 *Add 100 test ETH*；Sepolia 上给这个地址转一些测试币 |

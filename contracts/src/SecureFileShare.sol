@@ -2,10 +2,10 @@
 pragma solidity ^0.8.24;
 
 /// @title SecureFileShare
-/// @notice Registry and access-control state machine for the CSIT953 secure file
-///         sharing system. Files are encrypted and signed off-chain; this contract
-///         keeps the public keys, integrity hashes, request states and ECIES-wrapped
-///         file keys, and only lets a file's owner approve, reject or revoke access.
+/// @notice Registry and access-control state machine for secure file sharing.
+///         Files are encrypted and signed off-chain; this contract keeps the public
+///         keys, integrity hashes, request states and ECIES-wrapped file keys, and
+///         only lets a file's owner approve, reject or revoke access.
 /// @dev Everything stored or emitted here is public, `private` state included.
 ///      Wrapped keys stay confidential because of ECIES, not because of this
 ///      contract. There is no admin, no upgrade path, no ETH flow and no external call.
@@ -154,6 +154,7 @@ contract SecureFileShare {
     }
 
     /// @notice Approve a pending request and publish the DEK wrapped for the requester.
+    /// @dev Only the length is checked; wrapping to the right key is the owner client's job.
     /// @param wrappedKey ECIES ciphertext of the DEK under the requester's encPubKey.
     function approveAccess(bytes32 fileId, address requester, bytes calldata wrappedKey)
         external
@@ -201,6 +202,7 @@ contract SecureFileShare {
         return _keys[user];
     }
 
+    /// @notice The record of `fileId`; reverts with FileNotFound for an unknown id.
     function getFile(bytes32 fileId) external view returns (FileRecord memory) {
         FileRecord memory file = _files[fileId];
         if (file.owner == address(0)) revert FileNotFound(fileId);
@@ -225,10 +227,12 @@ contract SecureFileShare {
         if (owner != msg.sender) revert NotFileOwner(fileId, msg.sender);
     }
 
+    /// @dev registerKeys always sets both keys, so one is enough to check.
     function _hasKeys(address user) private view returns (bool) {
         return _keys[user].sigPubKey.length != 0;
     }
 
+    /// @dev 33 bytes with a 0x02/0x03 prefix; curve membership is left to clients.
     function _isCompressedKey(bytes calldata key) private pure returns (bool) {
         return key.length == PUBKEY_LEN && (key[0] == 0x02 || key[0] == 0x03);
     }

@@ -1,9 +1,9 @@
-"""Activity (DESIGN.md 5.5, 8): the contract's events as an audit trail.
+"""Activity page: the contract's events as an audit trail.
 
 Rows come from the session's EventLog, which the main window refreshes in the
-background, so this page makes no RPC calls of its own. Clicking a row opens
-the transaction in the block explorer, or copies its hash on a local chain.
-Export CSV writes the shown events for the report's evidence appendix.
+background, so this page makes no RPC calls of its own. Clicking a row opens the
+transaction in the block explorer, or copies its hash on a local chain. Export
+CSV writes every event matching the filter, not just the rows on screen.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from app.gui.theme import INK_2, INK_3, PAGE_PAD, SURFACE, px
 from app.gui.widgets import TONES, Button, Checkbox, hline, label
 from app.gui.worker import describe_error
 
-MAX_ROWS = 300
+MAX_ROWS = 300  # rows rendered; the CSV gets everything
 
 ActivityItem = tuple[ChainEvent, str]  # the event and its one-line description
 
@@ -53,6 +53,7 @@ class ActivityPage(Page):
         self._list.pack(fill="both", expand=True)
         self._count = label(self.content, "", style="small", colour=INK_3)
         self._count.pack(anchor="w", padx=px(PAGE_PAD), pady=px(10))
+        # Initial load; later events arrive through wants() and reload().
         host.worker.submit(
             host.session.events.refresh,
             lambda _new: self.reload(),
@@ -65,6 +66,7 @@ class ActivityPage(Page):
         return bool(events)
 
     def reload(self) -> None:
+        """Rebuild the rows from the cached event log, newest first."""
         session = self.host.session
         me = session.address
         everything = session.events.events
@@ -85,9 +87,10 @@ class ActivityPage(Page):
         self._count.configure(text=f"{plural(len(shown), 'event')} since block {session.chain.deploy_block}.{more}")
 
     def _open(self, key: str) -> None:
-        self.host.tx_action(key.split("/")[0])[1]()
+        self.host.tx_action(key.split("/")[0])[1]()  # row key: "<tx hash>/<log index>"
 
     def _export(self) -> None:
+        """Write the filtered events to a CSV file chosen by the user."""
         events = self._shown
         path = filedialog.asksaveasfilename(
             parent=self,
@@ -108,6 +111,7 @@ class ActivityPage(Page):
 
 
 def _describe(event: ChainEvent, titles: dict[bytes | None, str], me: str) -> str:
+    """The line under the event title: which file, and who."""
     who = "you" if event.account == me else short_hex(event.account or "")
     name = titles.get(event.file_id, NO_LABEL) if event.file_id else ""
     if event.name == "KeysRegistered":
@@ -121,6 +125,7 @@ def _describe(event: ChainEvent, titles: dict[bytes | None, str], me: str) -> st
     return f"{name}, for {who}"
 
 
+# ListView callbacks: build a row's widgets once, fill them on every refresh.
 def _build_row(row: ListRow) -> None:
     body = row.body
     body.columnconfigure(1, weight=1)

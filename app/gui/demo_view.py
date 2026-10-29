@@ -1,16 +1,16 @@
-"""Security demo, shown only with SFS_DEMO=1 or --demo (DESIGN.md 8, 10.2).
+"""Security demo page, shown only with SFS_DEMO=1 or --demo.
 
-Two attacks for the live demonstration:
+Two simulated attacks:
 
-    A1 storage   flip a ciphertext byte, edit the signed manifest or delete the
-                 object, then Retrieve and verify shows which check catches it
-                 (S6, S7, missing object). The originals are kept as *.orig and
-                 put back by "Restore originals". Every edit starts from the
-                 original, so pressing a button twice never undoes the first one.
-    A2 user      call approveAccess on a file this account does not own (S1, S2).
-                 By default gas estimation stops it before sending; "broadcast"
-                 skips the estimate so the failed transaction is mined and can be
-                 shown in the explorer (DESIGN.md 10.4, E6).
+    storage   flip a ciphertext byte, edit the signed manifest or delete the
+              object; Retrieve and verify then shows which check catches it.
+              Originals are kept as *.orig and put back by "Restore the
+              originals". Every edit starts from the original, so pressing a
+              button twice never undoes the first edit.
+    user      call approveAccess on a file this account does not own. Gas
+              estimation stops it before sending unless "broadcast" is ticked;
+              that skips the estimate, so the reverted transaction is mined and
+              visible in the explorer.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ from app.services.models import FileSummary
 from app.services.requester import RequesterService
 from app.storage.object_store import LocalObjectStore
 
-BROADCAST_GAS = 300_000
+BROADCAST_GAS = 300_000  # fixed limit: no estimation, so the revert gets mined
 BACKUP_SUFFIX = ".orig"
 COLUMN_WRAP = 400
 
@@ -84,6 +84,7 @@ class DemoPage(Page):
         label(column, "File", style="small_strong").pack(anchor="w", pady=(0, px(6)))
         self._tamper_file = Select(column, [], width=COLUMN_WRAP)
         self._tamper_file.pack(fill="x")
+        # (button text, action key, expected outcome)
         actions = (
             ("Flip one bit of the ciphertext", "flip", "Expected: V1 fails; with forced decryption, V5 also fails."),
             ("Change the digest in the manifest", "manifest", "Expected: V2 and V4 fail."),
@@ -112,7 +113,7 @@ class DemoPage(Page):
         label(column, "Requester to approve", style="small_strong").pack(anchor="w", pady=(px(16), px(6)))
         self._requester = Field(column, width=COLUMN_WRAP, mono=True)
         self._requester.pack(fill="x")
-        hint = "Your own address tests self-approval (S2); any other address tests S1."
+        hint = "Your own address tests approving your own request; any other address tests approving someone else's."
         label(column, hint, style="small", colour=INK_3, wrap=COLUMN_WRAP).pack(anchor="w", pady=(px(6), 0))
         self._broadcast = Checkbox(column, "Broadcast anyway so the reverted transaction is mined (uses gas)")
         self._broadcast.pack(anchor="w", pady=(px(16), 0))
@@ -124,6 +125,7 @@ class DemoPage(Page):
     # -------------------------------------------------------------- loading
 
     def reload(self) -> None:
+        """Load the catalogue for both file pickers."""
         if self._loading:
             return
         self._loading = True
@@ -140,7 +142,7 @@ class DemoPage(Page):
         self._loading = False
         self._files = list(reversed(files))
         self._tamper_file.set_options([(to_hex32(f.file_id), _describe(f)) for f in self._files])
-        others = [f for f in self._files if not f.is_mine]
+        others = [f for f in self._files if not f.is_mine]  # the attack needs someone else's file
         self._attack_file.set_options([(to_hex32(f.file_id), _describe(f)) for f in others])
         self._fill_requesters()
 
@@ -149,6 +151,7 @@ class DemoPage(Page):
         self._tamper_result.configure(text=describe_error(exc), foreground=RED)
 
     def _fill_requesters(self) -> None:
+        """Default the requester to the user's own address, i.e. self-approval."""
         if not self._requester.get():
             self._requester.set(self.host.session.address)
 
@@ -158,6 +161,7 @@ class DemoPage(Page):
     # --------------------------------------------------------------- tamper
 
     def _tamper(self, action: str) -> None:
+        """Apply one storage edit on the worker; needs the local directory store."""
         summary = self._file(self._tamper_file)
         if summary is None:
             self._tamper_result.configure(text="Select a file first.", foreground=INK_2)
@@ -189,6 +193,7 @@ class DemoPage(Page):
     # --------------------------------------------------------------- attack
 
     def _attack(self) -> None:
+        """approveAccess on another owner's file: stopped by estimation, or forced on-chain."""
         summary = self._file(self._attack_file)
         if summary is None:
             self._attack_result.configure(text="Register a file from another account first.", foreground=INK_2)
@@ -225,6 +230,7 @@ class DemoPage(Page):
         )
 
     def _blocked(self, exc: BaseException) -> None:
+        """A revert is the expected outcome; report where the call was stopped."""
         if isinstance(exc, TransactionFailedError):
             reason = f" {exc.revert}." if exc.revert else ""
             text = (
@@ -243,6 +249,7 @@ class DemoPage(Page):
 
 
 def _flip_byte(root: Path, obj: Path, _manifest: Path) -> str:
+    """Flip the lowest bit of the middle byte of the object."""
     data = bytearray(_original(obj))
     index = len(data) // 2
     before = data[index]
@@ -255,6 +262,7 @@ def _flip_byte(root: Path, obj: Path, _manifest: Path) -> str:
 
 
 def _edit_manifest(root: Path, _obj: Path, manifest: Path) -> str:
+    """Change one digit of ptDigest without re-signing."""
     value = json.loads(_original(manifest))
     digest = value["manifest"]["ptDigest"]
     value["manifest"]["ptDigest"] = ("1" if digest[0] == "0" else "0") + digest[1:]
@@ -276,6 +284,7 @@ def _delete_object(root: Path, obj: Path, _manifest: Path) -> str:
 
 
 def _restore(root: Path, obj: Path, manifest: Path) -> str:
+    """Move every backup back into place."""
     restored = []
     for path in (obj, manifest):
         backup = _backup_path(path)
@@ -306,6 +315,7 @@ def _backup_path(path: Path) -> Path:
     return path.with_name(path.name + BACKUP_SUFFIX)
 
 
+# action key -> edit(store root, object path, manifest path)
 _TAMPER: dict[str, Callable[[Path, Path, Path], str]] = {
     "flip": _flip_byte,
     "manifest": _edit_manifest,
@@ -315,6 +325,7 @@ _TAMPER: dict[str, Callable[[Path, Path, Path], str]] = {
 
 
 def _describe(summary: FileSummary) -> str:
+    """Picker label: title, short file ID and owner."""
     owner = "you" if summary.is_mine else short_hex(summary.owner)
     return f"{file_title(summary.name, summary.label)} ({short_hex(summary.file_id)}, owner {owner})"
 

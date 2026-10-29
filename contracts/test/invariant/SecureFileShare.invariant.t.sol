@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {SecureFileShare} from "../../src/SecureFileShare.sol";
 import {SecureFileShareHandler} from "./SecureFileShareHandler.sol";
 
-/// @notice Stateful fuzzing of the request state machine (DESIGN.md 5.4).
+/// @notice Stateful fuzzing of the request state machine against a reference model.
 contract SecureFileShareInvariantTest is Test {
     SecureFileShare internal share;
     SecureFileShareHandler internal handler;
@@ -14,6 +14,7 @@ contract SecureFileShareInvariantTest is Test {
         share = new SecureFileShare();
         handler = new SecureFileShareHandler(share);
 
+        // Fuzz the handler's actions only, not its inspection getters.
         bytes4[] memory selectors = new bytes4[](6);
         selectors[0] = SecureFileShareHandler.registerFile.selector;
         selectors[1] = SecureFileShareHandler.requestAccess.selector;

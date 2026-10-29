@@ -552,7 +552,7 @@ assignment/
 ├── .env.local / .env.sepolia      # network settings, not in git (an RPC URL may contain an API key)
 ├── .env.example                   # template in git, placeholders only
 ├── .gitignore                     # keystore/ .env* storage/ .chain/ (except .env.example)
-└── environment.yml                # conda environment 953-a2
+└── environment.yml                # conda environment secure-file-share
 ```
 
 **Changes from the original plan**: the GUI replaces `create_users.py` (create a keystore on the login page; on the local chain, click "Add 100 test ETH"). The Security demo page and the S1–S16 tests in forge and pytest replace `attack_*.py` and `tests/security/`; README.md maps each scenario to its tests. `import_key.py`, `http_store.py`, `storage_server.py` and `start_local_demo.sh` were not built.

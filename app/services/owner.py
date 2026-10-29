@@ -1,4 +1,4 @@
-"""Owner workflow (DESIGN.md 4.2, 4.3, 6.1, 7).
+"""Owner workflow.
 
 Protect & Register:
     salt, fileId = keccak256(owner, salt)  ->  DEK  ->  AES-256-GCM encrypt
@@ -11,9 +11,9 @@ Approve:
     owner's own wrapped copy on-chain, so no DEK is ever stored locally.
 
 File names:
-    the original name exists only inside the encrypted object (DESIGN.md 2.1).
-    My files still shows it: the owner's client opens the object with the same
-    wrapped copy of the DEK and keeps the name in memory for the session.
+    the original name exists only inside the encrypted object. The owner's
+    client recovers it with its own wrapped copy of the DEK and caches it in
+    memory for the session.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ from app.services.models import (
 from app.storage import StorageError
 from app.storage.object_store import MAX_OBJECT_BYTES
 
-MAX_LABEL_BYTES = 128  # SecureFileShare.MAX_LABEL_LEN
+MAX_LABEL_BYTES = 128  # must match SecureFileShare.MAX_LABEL_LEN
 MAX_FILE_BYTES = MAX_OBJECT_BYTES - 8 * 1024  # room for magic, nonce, header and tag
 
 
@@ -65,6 +65,8 @@ class _Sealed:
 
 
 class OwnerService:
+    """Protect files, list them, decide on access requests."""
+
     def __init__(self, session: Session) -> None:
         self._session = session
 
@@ -81,6 +83,7 @@ class OwnerService:
         report = on_progress or _ignore_progress
 
         sealed = self._seal(path, content, report)
+        # Upload before registering: an on-chain record must never point at a missing object.
         store = self._session.store
         store.put_object(sealed.encrypted.object_bytes)
         store.put_manifest(to_hex32(sealed.ctx.file_id), sealed.signed.to_bytes())
@@ -100,8 +103,8 @@ class OwnerService:
         )
 
     def _seal(self, path: Path, content: bytes, report: ProgressCallback) -> _Sealed:
-        """Everything that happens before anything leaves this computer. The DEK
-        exists only inside this function and in ownerWrappedKey."""
+        """All local work, before anything leaves this machine. The DEK lives only
+        inside this function and in ownerWrappedKey."""
         keys = self._session.keys
         salt = os.urandom(HASH_LEN)
         ctx = self._session.file_context(compute_file_id(keys.address, salt), keys.address)
@@ -118,6 +121,7 @@ class OwnerService:
         return _Sealed(salt=salt, ctx=ctx, encrypted=encrypted, signed=signed, own_wrapped_key=own_wrapped_key)
 
     def _register(self, sealed: _Sealed, label: str, report: ProgressCallback) -> TxReceipt:
+        """registerFile, then confirm the contract derived the same fileId."""
         session = self._session
         receipt = session.chain.register_file(
             session.account(),
@@ -137,6 +141,7 @@ class OwnerService:
     # -------------------------------------------------------------- lists
 
     def my_files(self) -> tuple[FileSummary, ...]:
+        """Files the current user registered, with their current on-chain state."""
         session = self._session
         session.events.refresh()
         summaries = []
@@ -191,9 +196,11 @@ class OwnerService:
         """Wrap the DEK for the key the owner confirmed and call approveAccess."""
         session, keys = self._session, self._session.keys
         record = self._owned_file(preview.file_id)
+        # The key on-chain must still be the one the owner confirmed.
         if self._requester_enc_key(preview.requester) != preview.enc_public_key:
             raise StaleApprovalError("The requester's encryption key changed after you reviewed it; review it again")
 
+        # Recover the DEK from the owner's on-chain copy, then rewrap it for the requester.
         ctx = session.file_context(preview.file_id, keys.address)
         try:
             dek = ecies.unwrap_key(record.owner_wrapped_key, keys.enc_key, ctx, keys.address)
@@ -209,8 +216,8 @@ class OwnerService:
         return session.chain.reject_access(session.account(), file_id, requester, on_submitted=on_submitted)
 
     def revoke(self, file_id: bytes, requester: str, *, on_submitted: SubmittedCallback | None = None) -> TxReceipt:
-        """Deletes the stored wrapped key. A DEK the requester already recovered stays
-        valid, and the approve calldata stays on-chain (DESIGN.md 6.3)."""
+        """Delete the stored wrapped key. Not retroactive: a DEK the requester already
+        recovered stays valid, and the approve calldata stays on-chain."""
         session = self._session
         return session.chain.revoke_access(session.account(), file_id, requester, on_submitted=on_submitted)
 
@@ -239,12 +246,11 @@ class OwnerService:
 
 
 def original_name(session: Session, record: FileRecord) -> str:
-    """The file's original name if this session can read it, otherwise "".
+    """Original file name if this session can know it, else "".
 
-    For my own files the name is read from the encrypted object with my wrapped
-    copy of the file key, once per session; it stays unknown while the stored
-    object is missing or modified. For other files it is known only after a
-    retrieve in this session passed every check (RequesterService.retrieve)."""
+    Own files: decrypted from storage with the owner's wrapped DEK, once per
+    session; unknown while the stored object is missing or modified. Other files:
+    known only after a fully verified retrieve in this session."""
     if record.file_id in session.names:
         return session.names[record.file_id]
     if record.owner != session.address:
@@ -260,7 +266,7 @@ def _read_own_name(session: Session, record: FileRecord) -> str:
     ctx = session.file_context(record.file_id, record.owner)
     try:
         data = session.store.get_object(record.ct_hash.hex())
-        if sha256(data) != record.ct_hash:  # what V1 checks: storage changed the object
+        if sha256(data) != record.ct_hash:  # same as V1: never decrypt a changed object
             return ""
         dek = ecies.unwrap_key(record.owner_wrapped_key, keys.enc_key, ctx, keys.address)
         return aead.decrypt_file(dek, ctx, data).header.name
@@ -269,6 +275,7 @@ def _read_own_name(session: Session, record: FileRecord) -> str:
 
 
 def _read_file(path: Path) -> bytes:
+    """Read at most MAX_FILE_BYTES; anything larger is refused."""
     try:
         with path.open("rb") as handle:
             content = handle.read(MAX_FILE_BYTES + 1)

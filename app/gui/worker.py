@@ -1,14 +1,14 @@
-"""Background jobs for the Tk GUI (DESIGN.md 8, 8.1; the quiz3 queue + after() pattern).
+"""Background jobs for the Tk GUI.
 
 Tk is not thread-safe. Chain calls, scrypt and encryption run on worker threads;
-their results are put on a queue that the Tk thread drains with after(), so
-every widget update happens on the Tk thread. A Sepolia confirmation takes
-10–30 s and the window stays responsive the whole time.
+results go onto a queue that the Tk thread drains with after(), so every widget
+update happens on the Tk thread. A Sepolia confirmation takes 10-30 s and the
+window stays responsive throughout.
 
 Errors from the four layers (ServiceError, ChainError, StorageError, CryptoError)
-and ConfigError carry messages written for the user and are shown as they are.
-Anything else is a bug: the user sees a short message and the traceback goes to
-the log. No exception message here contains key material.
+and ConfigError carry user-facing messages and are shown as is. Anything else is
+a bug: the user gets a short message, the traceback goes to the log. No exception
+message here contains key material.
 """
 
 from __future__ import annotations
@@ -43,6 +43,8 @@ def describe_error(exc: BaseException) -> str:
 
 
 class Worker:
+    """Runs jobs on threads and hands their callbacks back to the Tk thread."""
+
     def __init__(self, root: tk.Misc, *, poll_ms: int = POLL_MS) -> None:
         self._root = root
         self._poll_ms = poll_ms
@@ -78,12 +80,14 @@ class Worker:
         self._post(callback, owner)
 
     def close(self) -> None:
+        """Stop polling; callbacks still queued are dropped."""
         self._closed = True
 
     def _post(self, callback: Callable[[], None], owner: tk.Misc | None) -> None:
         self._queue.put(lambda: _run_if_alive(callback, owner))
 
     def _drain(self) -> None:
+        """Run every queued callback on the Tk thread, then poll again."""
         if self._closed:
             return
         try:

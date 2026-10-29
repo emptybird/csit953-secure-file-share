@@ -1,5 +1,5 @@
-"""Protect a file (DESIGN.md 4.2, 4.3, 7; task brief 2.1, 2.2): encrypt, sign,
-upload and register one file, with each stage shown as it finishes.
+"""Protect a file page: encrypt, sign, upload and register one file, each stage
+shown as it finishes.
 
     1 Encrypt     new DEK, AES-256-GCM over header + content
     2 Sign        ECDSA over the manifest (ctHash, salted plaintext digest)
@@ -45,12 +45,14 @@ from app.services.owner import MAX_FILE_BYTES, MAX_LABEL_BYTES, OwnerService
 
 FORM_WIDTH = 380
 STEPS_WRAP = 400
+# (key, title, what happens)
 _STEPS = (
     ("encrypt", "Encrypt with AES-256-GCM", "A new 256-bit file key is generated for this file only."),
     ("sign", "Sign the manifest", "Your signing key signs the ciphertext hash and a salted content digest."),
     ("upload", "Upload the ciphertext", "Only the encrypted object and the signed manifest are stored."),
     ("register", "Register on-chain", "registerFile records the hashes and your wrapped copy of the file key."),
 )
+# finished stage -> (step to mark done, step to start)
 _STAGE_DONE = {
     ProtectStage.ENCRYPTED: ("encrypt", "sign"),
     ProtectStage.SIGNED: ("sign", "upload"),
@@ -179,6 +181,7 @@ class ProtectPage(Page):
     # --------------------------------------------------------------- actions
 
     def _choose(self) -> None:
+        """Pick a file; resets the steps for a fresh run."""
         if self._running:
             return
         name = filedialog.askopenfilename(parent=self, title="Choose a file to protect")
@@ -198,6 +201,7 @@ class ProtectPage(Page):
         self._update_button()
 
     def _protect(self) -> None:
+        """Run protect_file as one transaction; its progress reports drive the step chain."""
         path, text = self._chosen, self._label.get().strip()
         if path is None:
             return
@@ -211,6 +215,7 @@ class ProtectPage(Page):
         worker = self.host.worker
 
         def job(on_submitted: SubmittedCallback) -> ProtectedFile:
+            # Runs on the worker thread: pass the tx hash on, hand UI updates to the Tk thread.
             def progress(stage: ProtectStage, detail: str) -> None:
                 if stage is ProtectStage.SUBMITTED:
                     on_submitted(detail)
@@ -219,11 +224,13 @@ class ProtectPage(Page):
             return self._owner.protect_file(path, text, on_progress=progress)
 
         if not self.host.run_transaction("Protect and register", job, self._done, self._failed, done="File registered"):
+            # Another transaction is pending: roll back the optimistic UI.
             self._running = False
             self._steps.reset()
             self._update_button()
 
     def _stage(self, stage: ProtectStage, detail: str) -> None:
+        """Map one progress report onto the step chain."""
         if stage in _STAGE_DONE:
             done, running = _STAGE_DONE[stage]
             self._steps.set(done, StepState.DONE, _describe(stage, detail))
@@ -255,6 +262,7 @@ class ProtectPage(Page):
         self._update_button()
 
     def _failed(self, exc: BaseException) -> None:
+        """Fail the running step, or show the error under the form if none was running."""
         self._running = False
         running = self._steps.running()
         message = describe_error(exc)
@@ -281,6 +289,7 @@ class ProtectPage(Page):
 
 
 def _describe(stage: ProtectStage, detail: str) -> str:
+    """Step detail text for a stage's raw progress detail."""
     if stage is ProtectStage.ENCRYPTED:
         return f"{detail.replace('AES-256-GCM, ', '')} of ciphertext, with a 16-byte authentication tag."
     if stage is ProtectStage.SIGNED:

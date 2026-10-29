@@ -1,4 +1,4 @@
-"""RequesterService.key_grant: the authorized key information a requester can see (task brief 2.5)."""
+"""RequesterService.key_grant: the authorized key information a requester can see."""
 
 from __future__ import annotations
 

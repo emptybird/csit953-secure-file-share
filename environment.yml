@@ -1,4 +1,4 @@
-name: 953-a2
+name: secure-file-share
 channels:
   - conda-forge
 dependencies:

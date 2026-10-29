@@ -1,10 +1,10 @@
 """Controls drawn on canvases: buttons, text fields, selects, segmented controls,
-checkboxes, badges and links (DESIGN.md 8).
+checkboxes, badges and links.
 
 Plain Tk cannot round corners or show hover states the same way on every
 platform, so these controls draw themselves with the tokens in theme.py. Each
-one can be reached with Tab, shows a focus ring, and can be driven from code
-(`invoke`, `set`), which the screenshot scripts and tests rely on.
+is reachable with Tab, shows a focus ring and can be driven from code
+(`invoke`, `set`), which the tests rely on.
 """
 
 from __future__ import annotations
@@ -53,6 +53,7 @@ RING = 2  # px of room around a control for its focus ring
 
 
 def surface_of(widget: tk.Misc) -> str:
+    """Background colour of `widget`, so a control blends into whatever it sits on."""
     try:
         return str(widget.cget("background"))
     except tk.TclError:
@@ -60,6 +61,7 @@ def surface_of(widget: tk.Misc) -> str:
 
 
 def rounded_rect(canvas: tk.Canvas, x1: float, y1: float, x2: float, y2: float, r: float, **kwargs: object) -> int:
+    """Rounded rectangle as a smoothed polygon; Tk canvases have no native one."""
     r = max(0.0, min(r, (x2 - x1) / 2, (y2 - y1) / 2))
     points = (
         x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r, x2, y2 - r, x2, y2,
@@ -104,6 +106,7 @@ class _CanvasControl(tk.Canvas):
         self.redraw()
 
     def extent(self) -> tuple[int, int]:
+        """Current size, or the requested size before the first layout."""
         width = self.winfo_width() if self.winfo_width() > 1 else int(self.cget("width"))
         height = self.winfo_height() if self.winfo_height() > 1 else int(self.cget("height"))
         return width, height
@@ -129,6 +132,8 @@ _BUTTON_SIZES = {"sm": (28, 10, "small_strong"), "md": (34, 14, "strong"), "lg":
 
 
 class Button(_CanvasControl):
+    """Canvas-drawn button; `kind` picks the colours, `size` the height and font."""
+
     def __init__(
         self,
         parent: tk.Misc,
@@ -158,6 +163,7 @@ class Button(_CanvasControl):
         return measure(self._font, self._text) + icon + gap + 2 * self._pad + 2 * px(RING)
 
     def _released(self, event: tk.Event) -> None:
+        # Fire only when released over the button, like a native one.
         was_pressed = self._pressed
         self._set_flags(pressed=False)
         width, height = self.extent()
@@ -243,7 +249,7 @@ class Field(_CanvasControl):
         on_return: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(parent, width=px(width), height=px(34) + 2 * px(RING), focusable=False)
-        self._placeholder = "" if secret else placeholder
+        self._placeholder = "" if secret else placeholder  # it would render as bullets
         self._showing_placeholder = False
         self._error = False
         self._text_font = font("mono" if mono else "body")
@@ -314,6 +320,7 @@ class Field(_CanvasControl):
         self.redraw()
 
     def redraw(self) -> None:
+        # Only the border is redrawn; the Entry lives in a canvas window on top.
         self.delete("frame")
         width, height = self.extent()
         ring = px(RING)
@@ -385,7 +392,7 @@ class Select(_CanvasControl):
         try:
             menu.tk_popup(self.winfo_rootx(), self.winfo_rooty() + self.winfo_height())
         finally:
-            menu.grab_release()
+            menu.grab_release()  # tk_popup may leave a grab behind
 
     def _changed(self) -> None:
         self.redraw()
@@ -482,6 +489,8 @@ class Segmented(_CanvasControl):
 
 
 class Checkbox(tk.Frame):
+    """Canvas-drawn box plus a label; clicking either toggles it."""
+
     def __init__(
         self, parent: tk.Misc, text: str, *, value: bool = False, command: Callable[[bool], None] | None = None
     ) -> None:
@@ -618,6 +627,7 @@ class Link(tk.Label):
 
 
 def _font_tuple(name: str) -> tuple[str, int, str]:
+    """(family, size, weight) of a named font, so "underline" can be appended."""
     actual = tkfont.nametofont(font(name)).actual()
     return (actual["family"], actual["size"], actual["weight"])
 

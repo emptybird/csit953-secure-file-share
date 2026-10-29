@@ -1,4 +1,4 @@
-"""Client-side cryptography (DESIGN.md 4 and 6).
+"""Client-side cryptography.
 
 encoding  canonical bytes for everything hashed, signed or used as AAD; secp256k1 keys
 aead      AES-256-GCM file encryption
@@ -6,14 +6,14 @@ signing   ECDSA-secp256k1-SHA256 signatures and the signed file manifest
 ecies     DEK wrapping for one recipient
 keystore  password-protected storage of a user's three private keys
 
-The exceptions below are shared by all modules. Messages are safe to show to the user.
+Exceptions below are shared by all modules; their messages are safe to show to users.
 """
 
 from __future__ import annotations
 
 
 class CryptoError(Exception):
-    """Base class; the GUI can catch this one type."""
+    """Base class for every crypto failure; catch this one type."""
 
 
 class EncodingError(CryptoError, ValueError):

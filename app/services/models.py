@@ -1,8 +1,8 @@
-"""Result types returned by the services (DESIGN.md 8, 9).
+"""Result types returned by the services.
 
-All are frozen dataclasses. The GUI renders them and never needs to call crypto
-or chain code itself. No type here holds a DEK or a private key; wrapped keys
-and plaintext are kept out of repr() so they never end up in a log line.
+Frozen dataclasses the GUI renders as is, without calling crypto or chain code
+itself. None holds a DEK or a private key; wrapped keys and plaintext stay out
+of repr() so they never reach a log line.
 """
 
 from __future__ import annotations
@@ -20,6 +20,8 @@ from app.crypto.encoding import PUBLIC_KEY_LEN, fingerprint
 
 
 class KeyStatus(Enum):
+    """On-chain keys versus this keystore; values are display text."""
+
     NOT_REGISTERED = "Not registered"
     MATCHES = "Registered"
     MISMATCH = "Different keys registered on-chain"
@@ -27,7 +29,7 @@ class KeyStatus(Enum):
 
 @dataclass(frozen=True)
 class AccountInfo:
-    """Login page and status bar: who am I on which network."""
+    """Address, network, balance and key status of the logged-in user."""
 
     address: str
     network: str
@@ -55,6 +57,8 @@ ProgressCallback = Callable[[ProtectStage, str], None]
 
 @dataclass(frozen=True)
 class ProtectedFile:
+    """Result of a successful protect_file()."""
+
     file_id: bytes
     name: str
     size: int
@@ -78,8 +82,8 @@ class AccessRequest:
 
 @dataclass(frozen=True)
 class ApprovalPreview:
-    """What the confirmation dialog shows before approveAccess (DESIGN.md 8): the
-    owner should see exactly which key the file key will be encrypted to."""
+    """Shown before approveAccess, so the owner sees exactly which key the DEK
+    will be wrapped to."""
 
     file_id: bytes
     label: str
@@ -97,9 +101,9 @@ class ApprovalPreview:
 
 @dataclass(frozen=True)
 class FileSummary:
-    """One row of the Browse catalogue or of My Files. `my_status` is NONE for my own files.
-    `label` is the public label from the chain. `name` is the original file name if this
-    session can read it (my own files, files I decrypted), otherwise empty."""
+    """One catalogue row. `label` is the public on-chain label; `name` is the original
+    file name when this session knows it (own or decrypted files), else empty.
+    `my_status` is NONE for the user's own files."""
 
     file_id: bytes
     owner: str
@@ -135,9 +139,9 @@ class FileSummary:
 
 @dataclass(frozen=True)
 class KeyGrant:
-    """The file key material the contract holds for me (DESIGN.md 6.1): the
-    93-byte ECIES wrappedKey from approveAccess, or the owner's own copy.
-    It is public on-chain; only the recipient's K_enc can open it."""
+    """The wrapped DEK the contract holds for this user: the 93-byte ECIES
+    wrappedKey from approveAccess, or the owner's own copy. Public on-chain;
+    only the recipient's K_enc opens it."""
 
     file_id: bytes
     recipient: str
@@ -160,7 +164,7 @@ class KeyGrant:
 
 
 class Check(Enum):
-    """The requester's checks in the order they run (DESIGN.md 4.3)."""
+    """Requester-side checks, in run order."""
 
     V1_CT_HASH = ("V1", "Ciphertext hash matches the on-chain ctHash")
     V2_MANIFEST_HASH = ("V2", "Manifest hash matches the on-chain manifestHash")
@@ -194,6 +198,8 @@ class CheckResult:
 
 @dataclass(frozen=True)
 class VerificationReport:
+    """Check results of one retrieval, in Check order."""
+
     file_id: bytes
     results: tuple[CheckResult, ...]
 

@@ -1,9 +1,9 @@
-"""Requester workflow (DESIGN.md 4.3, 7, 8).
+"""Requester workflow.
 
 Browse files (discovered through FileRegistered events, state read from views),
-request access, and once approved, retrieve & verify. Every check compares what
+request access and, once approved, retrieve and verify. Every check compares what
 storage returned with what the chain says; nothing storage says about itself is
-trusted. Owners can retrieve their own files the same way with ownerWrappedKey.
+trusted. Owners retrieve their own files the same way, with ownerWrappedKey.
 """
 
 from __future__ import annotations
@@ -28,19 +28,21 @@ _UNSAFE_NAME_CHARS = str.maketrans({ch: "_" for ch in '<>:"|?*'})
 
 
 class RequesterService:
+    """Browse files, request access, retrieve and verify."""
+
     def __init__(self, session: Session) -> None:
         self._session = session
 
     # -------------------------------------------------------------- browse
 
     def catalogue(self) -> tuple[FileSummary, ...]:
-        """Every registered file with my current status, oldest first."""
+        """Every registered file with the caller's request status, oldest first."""
         session = self._session
         session.events.refresh()
         return tuple(self._summary(e.file_id, e.label) for e in session.events.file_registrations())
 
     def my_requests(self) -> tuple[FileSummary, ...]:
-        """Files I have asked for, with the current status of each request."""
+        """Files the caller has requested, with each request's current status."""
         session = self._session
         session.events.refresh()
         labels = {e.file_id: e.label for e in session.events.file_registrations()}
@@ -66,8 +68,8 @@ class RequesterService:
     # ------------------------------------------------------------- request
 
     def request_access(self, file_id: bytes, *, on_submitted: SubmittedCallback | None = None) -> TxReceipt:
-        """The owner will wrap the file key to my on-chain encPubKey, so it must be the
-        key in this keystore; the contract checks the rest (owner, active, status)."""
+        """The owner wraps the DEK to the caller's on-chain encPubKey, so that key must
+        match this keystore. The contract checks the rest (owner, active, status)."""
         session = self._session
         AccountService(session).require_registered()
         return session.chain.request_access(session.account(), file_id, on_submitted=on_submitted)
@@ -75,9 +77,8 @@ class RequesterService:
     # ----------------------------------------------------------- key grant
 
     def key_grant(self, file_id: bytes) -> KeyGrant:
-        """The authorized key information for `file_id`: what the contract stores
-        for me and since when. Raises AccessDeniedError unless the request is
-        Approved (or I own the file, in which case it is the owner's copy)."""
+        """The wrapped DEK the contract stores for the caller, and since when. Owners
+        get their own copy; anyone else gets AccessDeniedError unless Approved."""
         session = self._session
         record = session.chain.get_file(file_id)
         if record.owner == session.address:
@@ -104,11 +105,12 @@ class RequesterService:
     # ------------------------------------------------------------ retrieve
 
     def retrieve(self, file_id: bytes, *, force_decrypt: bool = False) -> RetrievedFile:
-        """Download, run V1–V6 and decrypt. Raises AccessDeniedError unless the request
-        is Approved (or I own the file); check failures are reported, not raised."""
+        """Download, run V1-V6 and decrypt. Raises AccessDeniedError unless Approved
+        (or the caller owns the file); check failures are reported, not raised."""
         session = self._session
         record = session.chain.get_file(file_id)
         wrapped_key = self._my_wrapped_key(record)
+        # Everything the checks compare against comes from the chain.
         owner_keys = session.chain.get_user_keys(record.owner)
         anchor = Anchor(
             context=session.file_context(file_id, record.owner),
@@ -130,6 +132,7 @@ class RequesterService:
         return retrieved
 
     def _my_wrapped_key(self, record: FileRecord) -> bytes:
+        """The owner's copy for own files, otherwise the approved request's key."""
         me = self._session.address
         if record.owner == me:
             return record.owner_wrapped_key
@@ -148,7 +151,7 @@ def save_plaintext(retrieved: RetrievedFile, directory: Path) -> Path:
     for attempt in range(MAX_NAME_ATTEMPTS):
         candidate = directory / (name.name if attempt == 0 else f"{name.stem} ({attempt}){name.suffix}")
         try:
-            handle = candidate.open("xb")
+            handle = candidate.open("xb")  # exclusive create: no check-then-write race
         except FileExistsError:
             continue
         except OSError as exc:
@@ -170,8 +173,8 @@ def _access_denied(file_id: bytes, status: RequestStatus) -> AccessDeniedError:
 
 
 def _fetch(read: Callable[[], bytes]) -> Fetched:
-    """A storage failure becomes a failed check in the report instead of an exception:
-    a deleted object is something to show, not to crash on (DESIGN.md 3, out of scope to prevent)."""
+    """Storage failures become failed checks, not exceptions: a deleted object is a
+    finding to report, not a crash."""
     try:
         return Fetched(data=read())
     except StorageError as exc:

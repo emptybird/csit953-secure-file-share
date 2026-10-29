@@ -45,7 +45,7 @@ Run these from the repository root.
 ```sh
 ./scripts/start_chain.sh                        # in another terminal; the state is kept in .chain/state.json
 cp .env.example .env.local
-conda activate 953-a2
+conda activate secure-file-share
 python scripts/deploy.py --network local
 ```
 

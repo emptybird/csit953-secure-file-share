@@ -1,8 +1,8 @@
-"""Retrieve and verify (DESIGN.md 4.3, 6.1; task brief 2.4, 2.5): the requester's side.
+"""Retrieve and verify page: the requester's side.
 
     1 Read your authorization       the approved request and its 93-byte wrapped key
     2 Check integrity and signature V1 ctHash, V2 manifestHash, V3 context, V4 ECDSA
-    3 Recover the file key          ECIES unwrap with my K_enc
+    3 Recover the file key          ECIES unwrap with the user's K_enc
     4 Decrypt and compare           V5 AES-256-GCM tag, V6 signed plaintext digest
 
 Results appear one at a time in the order they ran. "Save decrypted file" is
@@ -34,7 +34,8 @@ from app.services.requester import RequesterService, save_plaintext
 
 SIDE_WIDTH = 344
 STEPS_WRAP = 430
-REVEAL_MS = 140
+REVEAL_MS = 140  # pause between revealed checks
+# (key, title, what happens)
 _STAGES = (
     ("grant", "Read the authorization", "The contract must hold an approved request with a wrapped file key."),
     (
@@ -52,12 +53,14 @@ _STAGES = (
         "AES-256-GCM verifies its tag, then the content is compared with the signed digest.",
     ),
 )
+# stage -> the checks listed under it
 _STAGE_CHECKS = {
     "integrity": (Check.V1_CT_HASH, Check.V2_MANIFEST_HASH, Check.V3_CONTEXT, Check.V4_SIGNATURE),
     "key": (Check.UNWRAP,),
     "decrypt": (Check.V5_DECRYPT, Check.V6_PT_DIGEST),
 }
 _STATE = {Outcome.PASSED: StepState.DONE, Outcome.FAILED: StepState.FAILED, Outcome.SKIPPED: StepState.SKIPPED}
+# compact check titles for the step chain
 _SHORT_TITLES = {
     Check.V1_CT_HASH: "Ciphertext hash matches the chain",
     Check.V2_MANIFEST_HASH: "Manifest hash matches the chain",
@@ -68,7 +71,7 @@ _SHORT_TITLES = {
     Check.V6_PT_DIGEST: "Content matches the signed digest",
 }
 
-Outcome_ = tuple[KeyGrant | None, RetrievedFile | None, BaseException | None]
+Outcome_ = tuple[KeyGrant | None, RetrievedFile | None, BaseException | None]  # grant, result, access error
 
 
 class VerifyPage(Page):
@@ -112,6 +115,7 @@ class VerifyPage(Page):
     # ------------------------------------------------------------ navigation
 
     def on_show(self, **options: object) -> None:
+        """Open `file_id`: load its summary, then run the checks."""
         file_id = options.get("file_id")
         if not isinstance(file_id, bytes):
             return
@@ -141,11 +145,12 @@ class VerifyPage(Page):
     # ------------------------------------------------------------------ run
 
     def _run(self) -> None:
+        """Read the grant and retrieve on the worker; results are then revealed step by step."""
         summary = self._summary
         if summary is None or self._running:
             return
         self._running = True
-        self._run_id += 1
+        self._run_id += 1  # callbacks of an older run become no-ops
         run_id = self._run_id
         self._retrieved = None
         self._again.set_enabled(False)
@@ -158,7 +163,7 @@ class VerifyPage(Page):
         def job() -> Outcome_:
             try:
                 grant = self._requester.key_grant(summary.file_id)
-            except AccessDeniedError as exc:
+            except AccessDeniedError as exc:  # no grant: report it, never touch storage
                 return None, None, exc
             return grant, self._requester.retrieve(summary.file_id, force_decrypt=force), None
 
@@ -181,6 +186,7 @@ class VerifyPage(Page):
     def _reveal_grant(
         self, run_id: int, grant: KeyGrant | None, retrieved: RetrievedFile | None, denied: BaseException | None
     ) -> None:
+        """Settle the authorization step, then start revealing the checks."""
         if run_id != self._run_id:
             return
         if grant is None or retrieved is None:
@@ -203,6 +209,7 @@ class VerifyPage(Page):
         self.after(REVEAL_MS, lambda: self._reveal_checks(run_id, retrieved, results, steps, 0))
 
     def _reveal_checks(self, run_id: int, retrieved: RetrievedFile, results: dict, steps: list, index: int) -> None:
+        """Reveal one check per tick; a stage settles after its last check."""
         if run_id != self._run_id or not self.winfo_exists():
             return
         if index == len(steps):
@@ -238,6 +245,7 @@ class VerifyPage(Page):
     # ---------------------------------------------------------- side panels
 
     def _show_grant(self, grant: KeyGrant | None) -> None:
+        """Side panel: the wrapped key the contract holds for this user."""
         body = self._key_panel.body
         clear(body)
         heading = tk.Frame(body, background=SURFACE)
@@ -266,6 +274,7 @@ class VerifyPage(Page):
         error: str = "",
         saved: Path | None = None,
     ) -> None:
+        """Side panel outcome: verified (with save), failed, denied, error or in progress."""
         body = self._result_panel.body
         clear(body)
         wrap = SIDE_WIDTH - 40
@@ -321,6 +330,7 @@ class VerifyPage(Page):
     # ------------------------------------------------------------------ save
 
     def _save(self) -> None:
+        """Save into a chosen folder on the worker; the plaintext is released once written."""
         retrieved = self._retrieved
         if retrieved is None:
             return
@@ -352,6 +362,7 @@ def _sub_check(result: CheckResult) -> SubCheck:
 
 
 def _denied_text(summary: FileSummary | None, denied: BaseException | None) -> str:
+    """Why there is no grant, phrased from the request status."""
     status = summary.my_status if summary is not None else None
     return {
         RequestStatus.NONE: "No request exists for this file, so the contract holds no file key for you.",
@@ -362,6 +373,7 @@ def _denied_text(summary: FileSummary | None, denied: BaseException | None) -> s
 
 
 def _stage_summary(stage: str, outcomes: list[Outcome]) -> str:
+    """Failure text for a stage."""
     failed = outcomes.count(Outcome.FAILED)
     if stage == "integrity":
         return f"{plural(failed, 'check')} failed. The stored data does not match the on-chain record."
@@ -371,6 +383,7 @@ def _stage_summary(stage: str, outcomes: list[Outcome]) -> str:
 
 
 def _seal(parent: tk.Misc, colour: str, icon: str) -> None:
+    """Large round outcome mark."""
     size = px(48)
     canvas = tk.Canvas(parent, width=size, height=size, background=SURFACE, highlightthickness=0)
     canvas.create_oval(1, 1, size - 1, size - 1, fill=colour, outline=colour)
@@ -379,6 +392,7 @@ def _seal(parent: tk.Misc, colour: str, icon: str) -> None:
 
 
 def _reveal_in_folder(path: Path) -> None:
+    """Show the saved file in the platform's file manager."""
     if sys.platform == "darwin":
         subprocess.Popen(["open", "-R", str(path)])  # nosec B603 B607 - fixed command, a path we wrote
     elif sys.platform == "win32":

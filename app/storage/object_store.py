@@ -1,15 +1,15 @@
-"""A local directory that simulates an untrusted cloud object store (DESIGN.md 2.2).
+"""A local directory that simulates an untrusted cloud object store.
 
-    <root>/objects/ab/ab3f…e9.bin     ciphertext object, named by SHA-256 of its content
-    <root>/manifests/0x7c…41.json     signed manifest, named by fileId
+    <root>/objects/ab/ab3f...e9.bin   ciphertext object, named by SHA-256 of its content
+    <root>/manifests/0x7c...41.json   signed manifest, named by fileId
 
 Content addressing makes the on-chain ctHash the download address, so the chain
 never stores a URL or path, and writing the same object twice keeps one copy.
 Names are checked against strict patterns before any path is built, so a crafted
 ctHash or fileId cannot reach outside the store (e.g. "../../keystore").
 
-Reads return the bytes exactly as stored. The store does not check them: that is
-the job of the services layer (V1, V2), because the store itself is untrusted.
+Reads return bytes exactly as stored, unchecked. The store is untrusted, so
+verification belongs to the services layer (V1, V2).
 """
 
 from __future__ import annotations
@@ -40,14 +40,22 @@ class ObjectStore(Protocol):
         """Store a ciphertext object and return its ctHash (lowercase hex SHA-256)."""
         ...
 
-    def get_object(self, ct_hash: str) -> bytes: ...
+    def get_object(self, ct_hash: str) -> bytes:
+        """Bytes stored under `ct_hash`, unverified. Raises ObjectNotFoundError."""
+        ...
 
-    def put_manifest(self, file_id: str, signed_manifest: bytes) -> None: ...
+    def put_manifest(self, file_id: str, signed_manifest: bytes) -> None:
+        """Store or replace the signed manifest of `file_id`."""
+        ...
 
-    def get_manifest(self, file_id: str) -> bytes: ...
+    def get_manifest(self, file_id: str) -> bytes:
+        """Signed manifest of `file_id`, unverified. Raises ObjectNotFoundError."""
+        ...
 
 
 class LocalObjectStore:
+    """Directory-backed ObjectStore."""
+
     def __init__(self, root: Path, *, max_object_bytes: int = MAX_OBJECT_BYTES) -> None:
         self._root = Path(root)
         self._max_object_bytes = max_object_bytes
@@ -57,7 +65,7 @@ class LocalObjectStore:
         return self._root
 
     def object_path(self, ct_hash: str) -> Path:
-        """Where an object lives; tamper scripts and tests use this to edit it directly."""
+        """On-disk path of an object; the demo and tests use it to tamper with the file."""
         name = _checked_name(ct_hash, _CT_HASH, "ctHash must be 64 lowercase hex characters")
         return self._root / OBJECTS_DIR / name[:_FANOUT_CHARS] / f"{name}.bin"
 
@@ -106,8 +114,8 @@ def _has_content(path: Path, data: bytes) -> bool:
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
-    """Write to a temporary file in the same directory, then rename it into place,
-    so a crash never leaves a half-written object behind."""
+    """Temp file in the same directory, fsync, then rename: a crash never leaves a
+    half-written file behind."""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=".tmp-")
@@ -125,6 +133,7 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 
 def _read(path: Path, limit: int, what: str) -> bytes:
+    """Read at most limit + 1 bytes; the extra byte detects an oversized file."""
     try:
         with path.open("rb") as handle:
             data = handle.read(limit + 1)

@@ -1,1 +1,1 @@
-"""CSIT953 Assignment 2 — secure file sharing client."""
+"""Secure file sharing: client-side encryption, on-chain access control."""

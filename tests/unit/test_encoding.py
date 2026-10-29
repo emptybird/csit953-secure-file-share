@@ -1,3 +1,5 @@
+"""Canonical encodings, addresses, fileId derivation and secp256k1 key handling."""
+
 from __future__ import annotations
 
 import re
@@ -179,7 +181,7 @@ def test_private_key_wrong_length() -> None:
 
 
 class TestLoadPublicKey:
-    """S14: malformed keys are rejected before they are ever used for ECDH."""
+    """Malformed keys are rejected before they are ever used for ECDH."""
 
     def test_rejects_uncompressed_encoding(self) -> None:
         uncompressed = (

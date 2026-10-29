@@ -1,15 +1,15 @@
-"""Network and directory settings (DESIGN.md 5.1).
+"""Network and directory settings.
 
-Each network has its own git-ignored file, `.env.local` or `.env.sepolia`, made
-from `.env.example`. Nothing chain-specific is hard-coded: the login screen
-lists whichever files exist and the chosen one decides RPC, chain and contract.
+One git-ignored env file per network (`.env.local`, `.env.sepolia`), copied from
+`.env.example`. Nothing chain-specific is hard-coded: the login screen lists the
+files present, and the chosen one decides RPC, chain and contract.
 
-    RPC_URL           http(s) endpoint; may embed an API key, so never print it whole
+    RPC_URL           http(s) endpoint; may embed an API key, never print it whole
     CHAIN_ID          checked against the node on connect
     CONTRACT_ADDRESS  written by scripts/deploy.py
     DEPLOY_BLOCK      first block scanned for events
     EXPLORER_URL      optional, e.g. https://sepolia.etherscan.io
-    STORAGE_DIR       optional, default storage/ (relative paths start at the project root)
+    STORAGE_DIR       optional, default storage/ (relative to the project root)
 """
 
 from __future__ import annotations
@@ -72,6 +72,7 @@ def available_networks(root: Path = ROOT_DIR) -> list[str]:
 
 
 def load_config(network: str, root: Path = ROOT_DIR) -> AppConfig:
+    """Load and validate `.env.<network>` under `root`. Raises ConfigError."""
     if not _NETWORK_NAME.fullmatch(network) or network == _TEMPLATE_SUFFIX:
         raise ConfigError(f"Unknown network name {network!r}")
     env_path = root / f"{_ENV_PREFIX}{network}"

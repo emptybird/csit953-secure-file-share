@@ -95,6 +95,8 @@ class Host(Protocol):
 
 
 class LoginHost(Protocol):
+    """The subset the login page needs before a session exists."""
+
     worker: Worker
 
     def attach_session(self, session: Session, alias: str, config: AppConfig) -> None: ...

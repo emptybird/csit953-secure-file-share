@@ -16,7 +16,7 @@ Design decisions, threat model and limitations: [DESIGN.md](DESIGN.md). Contract
 
 | Tool | Used for |
 |---|---|
-| conda (Miniforge or Miniconda) | the `953-a2` environment from `environment.yml`: Python 3.11, Tk ≥ 8.6.13, cryptography, web3, eth-account, python-dotenv, pytest, py_ecc, bandit |
+| conda (Miniforge or Miniconda) | the `secure-file-share` environment from `environment.yml`: Python 3.11, Tk ≥ 8.6.13, cryptography, web3, eth-account, python-dotenv, pytest, py_ecc, bandit |
 | [Foundry](https://book.getfoundry.sh/getting-started/installation) | `anvil` (local chain) and `forge` (build and contract tests) |
 
 `forge-std` is vendored in `contracts/lib/`, so no `forge install` is needed. Foundry on Windows needs Git Bash or WSL; without Foundry, `scripts/deploy.py` deploys the committed artifact in `app/chain/abi/`.
@@ -27,7 +27,7 @@ Run everything from the project root.
 
 ```sh
 conda env create -f environment.yml
-conda activate 953-a2
+conda activate secure-file-share
 cp .env.example .env.local
 
 ./scripts/start_chain.sh                     # terminal 1: Anvil on 127.0.0.1:8545, chain 31337
@@ -94,22 +94,22 @@ Every scenario of DESIGN.md §10.2 has an automated test. Solidity tests are in 
 
 | ID | Scenario | Expected result | Tests |
 |---|---|---|---|
-| S1 | Another user calls `approveAccess` on Alice's file | revert `NotFileOwner` | `AccessControl.t.sol::test_S1_strangerCannotApprove`, `Fuzz.t.sol::testFuzz_S1_nonOwnerCannotManageFile`, `test_chain_client.py::test_S1_revert_is_caught_before_sending`, `test_gui_demo.py::test_unauthorized_approve_is_rejected_before_and_after_broadcast` |
-| S2 | Bob approves his own request | revert `NotFileOwner` | `AccessControl.t.sol::test_S2_requesterCannotApproveOwnRequest` |
-| S3 | Approve twice, or approve a rejected request | revert `InvalidStatus` | `AccessControl.t.sol::test_S3_cannotApproveTwice`, `test_S3_cannotApproveRejectedRequest` |
-| S4 | Owner requests own file; unknown file; requester without keys | revert `OwnerCannotRequest`, `FileNotFound`, `KeysNotRegistered` | `AccessControl.t.sol::test_S4_*` |
-| S5 | Register the same salt twice | revert `FileAlreadyExists` | `Registration.t.sol::test_S5_registerFile_rejectsDuplicateSalt` |
-| S6 | Flip a byte of the stored ciphertext | V1 fails; forced decryption fails V5 | `test_verification.py::test_S6_*`, `test_aead.py::test_S6_any_flipped_byte_is_detected` |
-| S7 | Change ptDigest in the stored manifest | V2 and V4 fail; forced decryption fails V6 | `test_verification.py::test_S7_*`, `test_signing.py::test_S7_modified_pt_digest_is_detected` |
-| S8 | Attacker re-signs a forged manifest with their own key | V4 fails, because the key comes from the chain | `test_verification.py::test_S8_*`, `test_signing.py::test_S8_attacker_resigning_fails_with_onchain_key` |
-| S9 | Roll the object back to an older version | V1 fails | `test_verification.py::test_S9_rollback_to_an_older_version` |
-| S10 | Mallory opens Bob's wrapped key with her own key | unwrap fails | `test_verification.py::test_S10_someone_elses_wrapped_key`, `test_ecies.py::test_S10_other_users_key_fails` |
-| S11 | Use file A's wrapped key for file B | unwrap fails (HKDF info and AAD differ) | `test_verification.py::test_S11_wrapped_key_of_another_file`, `test_ecies.py::test_S11_wrapped_key_cannot_move_to_another_file` |
-| S12 | A rejected or revoked requester asks for the key | no wrapped key on-chain; the client refuses | `AccessControl.t.sol::test_S12_rejectedAndRevokedRequestersHoldNoWrappedKey`, `test_workflows.py::TestRejectBranch`, `TestRevokeBranch` |
-| S13 | Wrong keystore password | not opened; same message as a damaged file | `test_keystore.py::test_S13_wrong_password`, `test_tampering_looks_like_a_wrong_password` |
-| S14 | Register a malformed or off-curve public key | the contract reverts; the owner's client refuses to wrap | `Registration.t.sol::test_S14_*`, `test_workflows.py::test_S14_off_curve_encryption_key_is_refused` |
-| S15 | Replay a mined transaction | the node rejects the used nonce | `test_chain_client.py::test_S15_replayed_transaction_is_rejected` |
-| S16 | Front-run a registration with the same salt | different fileId; the owner is unaffected | `Registration.t.sol::test_S16_frontRunWithSameSaltGetsDifferentFileId`, `Fuzz.t.sol::testFuzz_S16_fileIdIsBoundToSender` |
+| S1 | Another user calls `approveAccess` on Alice's file | revert `NotFileOwner` | `AccessControl.t.sol::test_strangerCannotApprove`, `Fuzz.t.sol::testFuzz_nonOwnerCannotManageFile`, `test_chain_client.py::test_revert_is_caught_before_sending`, `test_gui_demo.py::test_unauthorized_approve_is_rejected_before_and_after_broadcast` |
+| S2 | Bob approves his own request | revert `NotFileOwner` | `AccessControl.t.sol::test_requesterCannotApproveOwnRequest` |
+| S3 | Approve twice, or approve a rejected request | revert `InvalidStatus` | `AccessControl.t.sol::test_cannotApproveTwice`, `test_cannotApproveRejectedRequest` |
+| S4 | Owner requests own file; unknown file; requester without keys | revert `OwnerCannotRequest`, `FileNotFound`, `KeysNotRegistered` | `AccessControl.t.sol::test_requestAccess_unknownFileReverts`, `test_requestAccess_ownerCannotRequestOwnFile`, `test_requestAccess_requiresRegisteredKeys` |
+| S5 | Register the same salt twice | revert `FileAlreadyExists` | `Registration.t.sol::test_registerFile_rejectsDuplicateSalt` |
+| S6 | Flip a byte of the stored ciphertext | V1 fails; forced decryption fails V5 | `test_verification.py::test_flipped_ciphertext_byte`, `test_forced_decrypt_hits_the_gcm_tag`, `test_aead.py::test_any_flipped_byte_is_detected` |
+| S7 | Change ptDigest in the stored manifest | V2 and V4 fail; forced decryption fails V6 | `test_verification.py::test_modified_pt_digest`, `test_forced_decrypt_fails_v6`, `test_signing.py::test_modified_pt_digest_is_detected` |
+| S8 | Attacker re-signs a forged manifest with their own key | V4 fails, because the key comes from the chain | `test_verification.py::test_attacker_re_signs_with_own_key`, `test_re_signed_manifest_fails_v4_even_if_hash_matched`, `test_signing.py::test_attacker_resigning_fails_with_onchain_key` |
+| S9 | Roll the object back to an older version | V1 fails | `test_verification.py::test_rollback_to_an_older_version` |
+| S10 | Mallory opens Bob's wrapped key with her own key | unwrap fails | `test_verification.py::test_someone_elses_wrapped_key`, `test_ecies.py::test_other_users_key_fails` |
+| S11 | Use file A's wrapped key for file B | unwrap fails (HKDF info and AAD differ) | `test_verification.py::test_wrapped_key_of_another_file`, `test_ecies.py::test_wrapped_key_cannot_move_to_another_file` |
+| S12 | A rejected or revoked requester asks for the key | no wrapped key on-chain; the client refuses | `AccessControl.t.sol::test_rejectedAndRevokedRequestersHoldNoWrappedKey`, `test_workflows.py::TestRejectBranch`, `TestRevokeBranch` |
+| S13 | Wrong keystore password | not opened; same message as a damaged file | `test_keystore.py::test_wrong_password`, `test_tampering_looks_like_a_wrong_password` |
+| S14 | Register a malformed or off-curve public key | the contract reverts; the owner's client refuses to wrap | `Registration.t.sol::test_registerKeys_rejectsWrongLength`, `test_registerKeys_rejectsBadPrefix`, `test_workflows.py::test_off_curve_encryption_key_is_refused` |
+| S15 | Replay a mined transaction | the node rejects the used nonce | `test_chain_client.py::test_replayed_transaction_is_rejected` |
+| S16 | Front-run a registration with the same salt | different fileId; the owner is unaffected | `Registration.t.sol::test_frontRunWithSameSaltGetsDifferentFileId`, `Fuzz.t.sol::testFuzz_fileIdIsBoundToSender` |
 
 ## Project layout
 
@@ -157,7 +157,7 @@ The brief allows a local chain. Sepolia adds public transaction records that any
 
 | Symptom | Fix |
 |---|---|
-| Clicks are ignored or the window draws incorrectly on macOS | run from the `953-a2` conda environment (Tk ≥ 8.6.13); the app warns about older Tk versions |
+| Clicks are ignored or the window draws incorrectly on macOS | run from the `secure-file-share` conda environment (Tk ≥ 8.6.13); the app warns about older Tk versions |
 | "No contract at … deploy it first" | the chain was reset; run `python scripts/deploy.py --network local` again |
 | "Cannot reach 127.0.0.1 …" | start `./scripts/start_chain.sh` |
 | "Not enough ETH in this account to pay for gas" | *Add 100 test ETH* on the local chain, or fund the address on Sepolia |

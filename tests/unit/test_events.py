@@ -1,3 +1,5 @@
+"""Event model, incremental log scanning and CSV export, against a fake client."""
+
 from __future__ import annotations
 
 import csv

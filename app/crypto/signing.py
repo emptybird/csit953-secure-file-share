@@ -1,4 +1,4 @@
-"""ECDSA signatures and the signed file manifest (DESIGN.md 4.3).
+"""ECDSA signatures and the signed file manifest.
 
     manifest      = canonical JSON {schema, chainId, contract, fileId, owner,
                                     ctHash, ctSize, ptDigest, enc, createdAt}
@@ -6,13 +6,13 @@
     signature     = ECDSA(K_sig, manifest)                    -> off-chain, next to the manifest
     stored file   = canonical JSON {manifest, signature: {r, s}}
 
-ECDSA uses secp256k1 with SHA-256. The nonce k is derived deterministically from
-the key and message (RFC 6979), so a weak or repeated random number can never
-leak the signing key. s is normalised to the lower half of the group order and
-verify() accepts only that form, so every valid signature has exactly one encoding.
+ECDSA over secp256k1 with SHA-256. Nonces are deterministic (RFC 6979), so a weak
+or repeated RNG output cannot leak the signing key. s is normalised to the low
+half of the group order and verify() accepts only that form: one valid encoding
+per signature.
 
-The signing public key is deliberately not stored with the manifest: verifiers
-must use the owner's sigPubKey registered on-chain (V4), otherwise an attacker
+The signing public key is deliberately not stored with the manifest. Verifiers
+must use the owner's sigPubKey registered on-chain (V4); otherwise an attacker
 could re-sign a forged manifest with their own key.
 """
 
@@ -54,6 +54,8 @@ _SIGNATURE_FIELDS = frozenset({"r", "s"})
 
 @dataclass(frozen=True)
 class Signature:
+    """ECDSA (r, s), range-checked; serialised as 32-byte hex each."""
+
     r: int
     s: int
 
@@ -110,6 +112,8 @@ _SIGNED_FIELDS = frozenset({"manifest", "signature"})
 
 @dataclass(frozen=True)
 class Manifest:
+    """What the owner signs; its SHA-256 is anchored on-chain."""
+
     context: FileContext
     ct_hash: bytes
     ct_size: int
@@ -190,6 +194,7 @@ class SignedManifest:
 
 
 def build_manifest(ctx: FileContext, encrypted: aead.EncryptedFile, *, created_at: int | None = None) -> Manifest:
+    """Manifest for a freshly encrypted file; createdAt defaults to now."""
     return Manifest(
         context=ctx,
         ct_hash=encrypted.ct_hash,

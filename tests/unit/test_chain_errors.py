@@ -1,3 +1,5 @@
+"""Revert decoding and translation of web3/requests exceptions into readable ChainErrors."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,10 +24,11 @@ ABI = load_abi()
 TABLE = error_table(ABI)
 FILE_ID = bytes.fromhex("7c" * 31 + "41")
 MALLORY = "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
-SAMPLE_ARGS = {"bytes32": FILE_ID, "address": MALLORY, "uint8": 2}
+SAMPLE_ARGS = {"bytes32": FILE_ID, "address": MALLORY, "uint8": 2}  # one value per ABI type in use
 
 
 def _revert_data(signature: str, types: list[str], values: list[object]) -> str:
+    """Revert payload as 0x-hex: the selector of `signature`, then the ABI-encoded values."""
     return "0x" + (keccak(text=signature)[:4] + encode(types, values)).hex()
 
 

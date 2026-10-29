@@ -1,4 +1,4 @@
-"""Design tokens: colours, type scale and sizes (DESIGN.md 8, 8.1).
+"""Design tokens: colours, type scale and sizes.
 
 The GUI uses plain Tk widgets and draws its own controls on canvases, so it
 looks the same on macOS, Windows and Linux and needs no ttk theme. The palette
@@ -127,4 +127,5 @@ def line_height(name: str) -> int:
 
 
 def px(value: float) -> int:
+    """Logical pixels to device pixels."""
     return round(value * _scale)

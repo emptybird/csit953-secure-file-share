@@ -1,11 +1,11 @@
-"""Client for the SecureFileShare contract (DESIGN.md 5).
+"""Client for the SecureFileShare contract.
 
 client  web3.py wrapper: typed view calls and signed transactions
 errors  custom-error decoding and readable messages for reverts and RPC failures
 events  event decoding, incremental log scanning and CSV export for the Activity Log
 
-The exceptions below are shared by all modules. Messages are safe to show to the
-user; in particular they never contain the RPC URL, which may embed an API key.
+Exceptions below are shared by all modules. Their messages are safe to show to
+users and never contain the RPC URL, which may embed an API key.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ class RequestStatus(IntEnum):
 
 
 class ChainError(Exception):
-    """Base class; the GUI can catch this one type."""
+    """Base class for every chain failure; catch this one type."""
 
 
 class ChainConnectionError(ChainError):

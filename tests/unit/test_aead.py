@@ -1,3 +1,5 @@
+"""AES-256-GCM file encryption: round trip, confidentiality, integrity and input checks."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -74,7 +76,7 @@ class TestConfidentiality:
 
 class TestIntegrity:
     @pytest.mark.parametrize("index", [0, 4, 15, 16, 200, -16, -1], ids=lambda i: f"byte{i}")
-    def test_S6_any_flipped_byte_is_detected(self, dek: bytes, ctx: FileContext, index: int) -> None:
+    def test_any_flipped_byte_is_detected(self, dek: bytes, ctx: FileContext, index: int) -> None:
         obj = _encrypt(dek, ctx).object_bytes
         with pytest.raises(DecryptionError):
             aead.decrypt_file(dek, ctx, _flip(obj, index % len(obj)))

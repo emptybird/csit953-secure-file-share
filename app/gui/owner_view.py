@@ -1,9 +1,9 @@
-"""My files (DESIGN.md 8, owner): every file I registered and who asked for it.
+"""My files page: every file the user registered and who asked for it.
 
-Selecting a file shows its requests. Approve first opens a dialog with the
-requester's encryption-key fingerprint as read from the chain, because that is
-the key the file key will be encrypted to; reject, revoke and deactivate also
-ask before sending a transaction.
+Selecting a file shows its requests. Approve first shows the requester's
+encryption-key fingerprint as read from the chain, since that is the key the DEK
+gets wrapped to; reject, revoke and deactivate also confirm before sending a
+transaction.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from app.services.models import AccessRequest, ApprovalPreview, FileSummary
 from app.services.owner import OwnerService
 
 DETAIL_WRAP = 330
+# request status -> hint under the request
 _HINTS = {
     RequestStatus.PENDING: "Approval encrypts the file key to this key.",
     RequestStatus.APPROVED: "Can retrieve and decrypt the file.",
@@ -34,7 +35,7 @@ _HINTS = {
 }
 _DEACTIVATED_PENDING_HINT = "The file is deactivated and accepts no approvals. Reject to close the request."
 
-FileItem = tuple[FileSummary, tuple[AccessRequest, ...]]
+FileItem = tuple[FileSummary, tuple[AccessRequest, ...]]  # a file and its access requests
 
 
 class FilesPage(Page):
@@ -66,6 +67,7 @@ class FilesPage(Page):
     # -------------------------------------------------------------- loading
 
     def reload(self) -> None:
+        """Load files and their requests on the worker; calls made meanwhile coalesce into one."""
         if self._loading:
             self._reload_again = True
             return
@@ -78,11 +80,13 @@ class FilesPage(Page):
         self.host.worker.submit(job, self._loaded, self._load_failed, owner=self, name="my-files")
 
     def wants(self, events: Sequence[ChainEvent]) -> bool:
+        """A new file of this user, or any event on a file already listed."""
         me = self.host.session.address
         mine = {summary.file_id for summary, _ in self._items.values()}
         return any((e.name == "FileRegistered" and e.args.get("owner") == me) or e.file_id in mine for e in events)
 
     def on_show(self, **options: object) -> None:
+        """Select `file_id` if given; load first when it is not listed yet."""
         file_id = options.get("file_id")
         if isinstance(file_id, bytes):
             self._wanted = file_id_text(file_id)
@@ -94,7 +98,8 @@ class FilesPage(Page):
 
     def _loaded(self, items: list[FileItem]) -> None:
         self._items = {file_id_text(summary.file_id): (summary, requests) for summary, requests in items}
-        self._list.set_items([(key, self._items[key]) for key in reversed(list(self._items))])
+        self._list.set_items([(key, self._items[key]) for key in reversed(list(self._items))])  # newest first
+        # Sidebar badge: pending requests on active files.
         pending = sum(pending_count([r.status for r in requests]) for summary, requests in items if summary.active)
         self.host.set_badge(self.key, pending)
         if self._wanted in self._items:
@@ -122,6 +127,7 @@ class FilesPage(Page):
         return self._items.get(key) if key else None
 
     def _show_detail(self) -> None:
+        """Rebuild the detail pane for the selected file."""
         body = self._detail.body
         clear(body)
         item = self._selected()
@@ -171,6 +177,7 @@ class FilesPage(Page):
             label(pane, note, style="small", colour=INK_3, wrap=DETAIL_WRAP).pack(anchor="w", pady=(px(4), 0))
 
     def _request_block(self, pane: tk.Frame, summary: FileSummary, request: AccessRequest, idle: bool) -> None:
+        """One request: requester, status, key fingerprint, hint and the allowed actions."""
         block = tk.Frame(pane, background=SURFACE, highlightthickness=1, highlightbackground=LINE)
         block.pack(fill="x", pady=(px(10), 0))
         inner = tk.Frame(block, background=SURFACE)
@@ -209,8 +216,10 @@ class FilesPage(Page):
         actions.pack(anchor="w", pady=(px(10), 0))
 
     # ------------------------------------------------------------ decisions
+    # Each decision is confirmed in a dialog, then sent through run_transaction.
 
     def _approve(self, summary: FileSummary, request: AccessRequest) -> None:
+        """Read the requester's key from the chain first; the dialog shows its fingerprint."""
         self.host.worker.submit(
             lambda: self._owner.prepare_approval(summary.file_id, request.requester),
             self._confirm_approval,
@@ -329,6 +338,7 @@ def request_actions(status: RequestStatus, *, active: bool) -> tuple[str, ...]:
 # ------------------------------------------------------------------- rows
 
 
+# ListView callbacks: build a row's widgets once, fill them on every refresh.
 def _build_row(row: ListRow) -> None:
     body = row.body
     body.columnconfigure(0, weight=1)

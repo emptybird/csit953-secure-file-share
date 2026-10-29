@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# Regenerate the raw evidence in evidence/logs/ from the code as it is now.
+# Regenerate the raw logs in evidence/logs/ from the current code.
 #
-#   conda activate 953-a2
+#   conda activate secure-file-share
 #   ./evidence/collect.sh
 #
-# Needs Foundry (forge, anvil) and the 953-a2 environment. Slither, Bandit and
-# Gitleaks are used when installed and skipped otherwise. Run it again after the
-# code freeze so the logs match the submitted version. Set PYTHON to use another
+# Needs Foundry (forge, anvil) and the secure-file-share environment. Slither, Bandit and
+# Gitleaks run when installed and are skipped otherwise. Rerun after the last
+# code change so the logs match the final version. Set PYTHON to use another
 # interpreter. Takes a few minutes: the invariant tests run three times.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LOGS="$ROOT/evidence/logs"
 PYTHON="${PYTHON:-python}"
+# Contract tests that act out an attack; forge-security-reverts.txt keeps their revert lines.
+SECURITY_TESTS='test_(strangerCannotApprove|requesterCannotApproveOwnRequest|cannotApprove(Twice|RejectedRequest)|requestAccess_(unknownFileReverts|ownerCannotRequestOwnFile|requiresRegisteredKeys)|rejectedAndRevokedRequestersHoldNoWrappedKey|registerFile_rejectsDuplicateSalt|frontRunWithSameSaltGetsDifferentFileId|registerKeys_rejects(WrongLength|BadPrefix))|testFuzz_(nonOwnerCannotManageFile|fileIdIsBoundToSender)'
 cd "$ROOT"
 rm -rf "$LOGS"
 mkdir -p "$LOGS"
@@ -57,7 +59,7 @@ run forge-test.txt sh -c 'cd contracts && forge test -vv'
 # Only the result and revert lines: the full traces print test-fixture keys that
 # secret scanners report as credentials.
 run forge-security-reverts.txt bash -c 'set -o pipefail; cd contracts &&
-    forge test --mt "_S[0-9]+_" -vvvv | grep -E "^\[(PASS|FAIL)\]|Revert\]"'
+    forge test --mt "$1" -vvvv | grep -E "^\[(PASS|FAIL)\]|Revert\]"' _ "$SECURITY_TESTS"
 run forge-gas-report.txt sh -c 'cd contracts && forge test --gas-report'
 run forge-coverage.txt sh -c 'cd contracts && forge coverage --no-match-coverage "test|lib" --report summary'
 run pytest.txt "$PYTHON" -m pytest -v -p no:cacheprovider
@@ -74,4 +76,4 @@ if have slither; then  # last: it runs forge clean
 else
     echo "slither not installed, skipped"
 fi
-echo "Logs written to evidence/logs/. Gitleaks, Bandit and Slither exit with 1 (Slither 255) when they report anything; see evidence/EVIDENCE.md for the assessment."
+echo "Logs written to evidence/logs/. Gitleaks, Bandit and Slither exit with 1 (Slither 255) when they report anything."
